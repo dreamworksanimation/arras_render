@@ -1,0 +1,11 @@
+Import('env')
+ 
+env.Tool('dwa_doxygen')
+ 
+#the name of the folio
+folioName = "arras_render"
+ 
+# Files and directories to use as input to Doxygen
+inputFiles = ['#client']
+ 
+dox = env.DWADoxygenSimple(folioName, inputFiles)

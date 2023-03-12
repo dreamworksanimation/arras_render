@@ -1,0 +1,3 @@
+Import('env')
+
+env.DWAInstallFiles('scripts', env.DWAGlob('*.js'))

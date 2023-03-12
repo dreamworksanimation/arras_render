@@ -1,0 +1,37 @@
+{
+    "name": "mcrt_progressive_credit",
+    "computations": {
+        "(client)": {
+            "messages": {
+                "mcrt": "*"
+            }
+        },
+        "mcrt": {
+            "entry": "yes",
+            "dso": "libcomputation_progmcrt.so",
+            "fps": 1,
+            "initialCredit": 2,
+	    "machineId": 0,
+            "requirements": {
+                "computationAPI": "4.x",
+                "context":"arras_moonray",
+                "resources": {
+                    "maxCores": "*",
+                    "minCores": 1.0,
+                    "memoryMB": 16384.0
+                }
+            },
+            "messages": {
+                "(client)": {
+                    "accept": [
+                        "RDLMessage",
+                        "GenericMessage",
+                        "ViewportMessage",
+                        "JSONMessage",
+                        "CreditUpdate"
+                    ]
+                }
+            }
+        }
+    }
+}

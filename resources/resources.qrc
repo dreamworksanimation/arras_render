@@ -1,0 +1,5 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+    <file alias="window-icon.png">images/arras-A.png</file>
+</qresource>
+</RCC>

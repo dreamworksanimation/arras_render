@@ -1,0 +1,55 @@
+Import('env')
+from os.path import join
+
+
+name = 'arras_render'
+sources = env.DWAGlob('*.cc')
+
+# expose the current directory as the include path
+include_paths = ['${INSTALL_DIR}/include']
+
+# Components needed to build/use this library.
+components = [
+    # Arras deps
+    'sdk',
+    'message_api',
+    'arras4_log',
+    'client_api',
+    'core_messages',
+    'client_receiver',
+    'mcrt_messages',
+    
+    # Scene RDL
+    'render_util',
+    'scene_rdl2',
+    
+    # Third party 
+    'jsoncpp',
+    'OpenImageIO',
+    'OpenEXR',
+    'boost_headers',
+    'boost_chrono_mt',
+    'boost_program_options_mt',
+    
+    'Qt5Core',
+    'Qt5Gui',
+    'Qt5Script',
+    'Qt5Widgets',
+]
+
+# Qt stuff
+#sources += env.Moc('ImageView.h')
+print '* Using QTDIR from SConscript setting:', env.subst('$QTDIR')
+env.Replace(QT4_AUTOSCAN=0)
+
+sources += env.Moc4('ImageView.h')
+
+qrc_sources = env.Qrc('../resources/resources.qrc')
+qrc_env = env.Clone()
+sources += qrc_env.Object(qrc_sources)
+
+env.DWAUseComponents(components)
+env.AppendUnique(CPPPATH = [env.Dir('.').srcnode()],)
+
+prog = env.DWAProgram(name, sources)
+env.DWAInstallBin(prog)

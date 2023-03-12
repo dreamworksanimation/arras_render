@@ -1,0 +1,95 @@
+{
+    "name": "mcrt_progressive_ihn",
+    "computations": {
+        "(client)": {
+            "messages": {
+                "merge": "*"
+            }
+        }, 
+
+        "dispatch": {
+            "entry": "yes",
+            "dso": "libcomputation_progmcrt_dispatch.so", 
+            "continuous": "false", 
+            "fps": 1,  
+            "numMachines": "$arrayNumber.mcrt",
+            "requirements": { 
+                "computationAPI": "4.x",
+                "context":"arras_moonray"
+            },
+            "messages": {
+                "(client)": {
+                    "accept": [
+                        "RDLMessage", 
+                        "GenericMessage", 
+                        "RenderedFrame", 
+                        "ViewportMessage", 
+                        "JSONMessage", 
+                        "RenderSetupMessage"
+                    ]
+                },
+                "merge": { "accept": ["GenericMessage"] }
+            }
+        },
+ 
+        "mcrt": {
+            "arrayExpand": 4,
+            "dso": "libcomputation_progmcrt.so", 
+            "fps": 1, 
+            "machineId": "$arrayIndex", 
+            "numMachines": "$arrayNumber", 
+            "packTilePrecision": "auto16",
+            "requirements": {
+                "computationAPI": "4.x",
+                "context":"arras_moonray",
+                "resources": {
+                    "maxCores": "*",
+                    "minCores": 63.0,
+                    "memoryMB": 16384
+                }
+            },
+            "messages": {
+                "(client)": {
+                    "accept": [
+                        "GenericMessage", 
+                        "ViewportMessage"
+                    ]
+                },
+                "dispatch": "*",
+                "merge": { "accept": ["GenericMessage"] }
+            }
+        },
+
+        "merge": {
+            "dso": "libcomputation_progmcrt_merge.so", 
+            "fps": 1, 
+            "numMachines": "$arrayNumber.mcrt", 
+            "packTilePrecision": "auto16",
+            "requirements": {  
+                "computationAPI": "4.x",
+                "context":"arras_moonray",
+                "resources": {
+                    "maxCores": 60,
+                    "minCores": 30.0
+                }
+            },  
+            "messages": {
+                "(client)": {
+                    "accept": [
+                        "ViewportMessage",
+                        "GenericMessage"
+                    ]
+                }, 
+                "mcrt": {
+                    "accept": [
+                        "PartialFrame",
+                        "ProgressiveFrame",
+                        "GenericMessage",
+                        "JSONMessage"
+                    ]
+                },
+                "dispatch": "GenericMessage"
+            }
+        }
+    }
+}

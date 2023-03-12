@@ -1,0 +1,1 @@
+imageView.sendCredit(1);

@@ -1,0 +1,36 @@
+{ 
+    "name": "mcrt_progressive_vec",
+    "computations": {
+        "(client)": {
+            "messages": {
+                "mcrt": "*"
+            }
+        },
+        "mcrt": {
+            "entry": "yes",
+            "dso": "libcomputation_progmcrt.so",
+            "fps": 1,
+	    "machineId": 0,
+            "exec_mode": "vector",
+            "requirements": {
+                "computationAPI": "4.x",
+                "context":"arras_moonray",
+                "resources": {
+                    "maxCores": "*",
+                    "minCores": 1.0,
+                    "memoryMB": 16384.0
+                }
+            },
+            "messages": {
+                "(client)": {
+                    "accept": [
+                        "RDLMessage",
+                        "GenericMessage",
+                        "ViewportMessage",
+                        "JSONMessage"
+                    ]
+                }
+            }
+        }
+    }
+}

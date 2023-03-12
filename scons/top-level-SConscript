@@ -1,0 +1,69 @@
+from os import path
+import os, re
+
+Import('env')
+
+##################################################################
+# DWA scons tool loading
+#
+# Load scons tools (modules in site_scons/site_tools)
+# that are not already provided by the SConstruct file.
+##################################################################
+
+from dwa_sdk import DWALoadSDKs
+
+# Load some DWA tools
+env.Tool('component')
+env.Tool('dwa_utils')
+env.Tool('dwa_run_test')
+env.Tool('dwa_install')
+env.Tool('python_sdk')
+env['CPPCHECK_LOC'] = '/rel/third_party/cppcheck/1.85/cppcheck'
+env.Tool('cppcheck')
+
+# load dependencies.
+DWALoadSDKs(env)    
+env['CXXFLAGS'].append('-Wall')
+env['CXXFLAGS'].append('-Werror')
+env['CXXFLAGS'].append('-Wextra')
+env['CXXFLAGS'].append('-Wno-class-memaccess') # W: with no trivial copy-assignment
+
+# Suppress depication warning from tbb-2020.
+env.AppendUnique(CPPDEFINES='TBB_SUPPRESS_DEPRECATED_MESSAGES')
+
+################################################################
+# Walk sub directories
+#
+# In this section we parse Sconscript files in subdirectories
+# by "walking" them. Depending on which env variable is used for
+# the call (env, less_strict_env), different default compiler
+# settings will be applied to the subdirectories. This basically
+# informs which environment to import at a top of a SConscript
+# file, when we do Import('env').
+################################################################
+
+env.DWASConscriptWalk(topdir='./client', ignore=[])
+env.DWASConscriptWalk(topdir='./sessions', ignore=[])
+env.DWASConscriptWalk(topdir='./scripts', ignore=[])
+env.DWASConscriptWalk(topdir='./doc', ignore=[])
+
+################################################################
+# End walking of sub directories
+# Do not parse any more sconscripts beyond this point.
+################################################################
+
+# Set default target
+env.Default(env.Alias('@install'))
+
+env.DWACppcheck(env.Dir('./client'), [])
+
+env.Alias('@run_all', env.Alias('@cppcheck'))
+
+######################################################################
+# End of customizable section.
+# Do not put any custom code beyond this point.
+######################################################################
+
+env.DWAFillInMissingInitPy()
+env.DWAResolveUndefinedComponents()
+env.DWAFreezeComponents()

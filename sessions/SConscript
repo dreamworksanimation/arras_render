@@ -1,0 +1,3 @@
+Import('env')
+
+env.DWAInstallFiles('sessions', env.DWAGlob('*.sessiondef'))

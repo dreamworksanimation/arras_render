@@ -1,0 +1,26 @@
+# This template is configured for default settings that will launch a pipeline
+# for release of a rez-2 build whenever a push happens on the main, master or
+# release branches. For alternative setups, please read the following wiki: 
+# http://mydw.dreamworks.net/display/SCM/Configuring+Harmony+Pipeline+Trigger+Github+Actions
+#
+# You may delete this comment block.
+#
+name: Harmony Pipeline CD Trigger
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - release
+  workflow_dispatch:
+
+jobs:
+  trigger_pipeline:
+    runs-on: [self-hosted, rez]
+    steps:
+      - name: Launch Action
+        uses: CM/cm-actions/pipeline_trigger@main
+        with:
+          pipe_config: 'release'
+          rez_config: 'rez-2'
