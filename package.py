@@ -22,12 +22,12 @@ authors = ['Dreamworks Animation R&D - JoSE Team & friends', 'psw-jose@dreamwork
 help = ('For assistance, '
         "please contact the folio's owner at: psw-jose@dreamworks.com")
 
-if 'cmake' in sys.argv:
-    build_system = 'cmake'
-    build_system_pbr = 'cmake_modules'
-else:
+if 'scons' in sys.argv:
     build_system = 'scons'
     build_system_pbr = 'bart_scons-10'
+else:
+    build_system = 'cmake'
+    build_system_pbr = 'cmake_modules'
 
 variants = [
     ['os-CentOS-7', 'opt_level-optdebug', 'refplat-vfx2020.3', 'gcc-6.3.x.2'],
