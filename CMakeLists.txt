@@ -16,6 +16,14 @@ list(APPEND CMAKE_MESSAGE_CONTEXT ${PROJECT_NAME})
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 # ================================================
+# Options
+# ================================================
+option(ABI_SET_VERSION "Enable the abi-version option" OFF)
+if(ABI_SET_VERSION)
+    set(ABI_VERSION "6" CACHE STRING "If ABI_SET_VERSION is on, which version to set")
+endif()
+
+# ================================================
 # Find dependencies
 # ================================================
 set(BUILD_SHARED_LIBS ON)
