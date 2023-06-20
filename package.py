@@ -11,7 +11,8 @@ def version():
     """
     Increment the build in the version.
     """
-    _version = '5.3.4'
+    _version = '5.3.7'
+
     from rezbuild import earlybind
     return earlybind.version(this, _version)
 
@@ -34,12 +35,19 @@ variants = [
     ['os-CentOS-7', 'opt_level-debug',    'refplat-vfx2020.3', 'gcc-6.3.x.2'],
     ['os-CentOS-7', 'opt_level-optdebug', 'refplat-vfx2021.0', 'gcc-9.3.x.1'],
     ['os-CentOS-7', 'opt_level-debug',    'refplat-vfx2021.0', 'gcc-9.3.x.1'],
+    ['os-CentOS-7', 'opt_level-optdebug', 'refplat-vfx2022.0', 'gcc-9.3.x.1'],
+    ['os-CentOS-7', 'opt_level-debug',    'refplat-vfx2022.0', 'gcc-9.3.x.1'],
+    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2021.0', 'gcc-9.3.x.1'],
+    ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2021.0', 'gcc-9.3.x.1'],
+    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2022.0', 'gcc-9.3.x.1'],
+    ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2022.0', 'gcc-9.3.x.1'],
 ]
 
 scons_targets = ['@install']
 sconsTargets = {
     'refplat-vfx2020.3' : scons_targets,
     'refplat-vfx2021.0' : scons_targets,
+    'refplat-vfx2022.0' : scons_targets,
 }
 
 requires = [
@@ -47,15 +55,15 @@ requires = [
     "arras4_core-4.10",
         
     # MCRT
-    "mcrt_dataio-10.39",
-    'moonbase_proxies-9.45',
-    "mcrt_messages-9.7",
-    "scene_rdl2-10.38",
+    "mcrt_dataio-12.0",
+    'moonbase_proxies-11.0',
+    "mcrt_messages-11.0",
+    "scene_rdl2-12.0",
         
     # Third party deps
     "boost",
     "jsoncpp-0.6.0",
-    'openimageio-2',
+    'openimageio-2.3.20.0.x',
     "openexr"
 ]
 

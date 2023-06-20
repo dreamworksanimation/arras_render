@@ -346,7 +346,7 @@ getSessionDefinition(const std::string& sessionName,
                 // assume we need same moonshine version as the moonbase_proxies
                 // we're using
                 std::ostringstream ssRezPkgs;
-                ssRezPkgs << "mcrt_computation arras4_core_impl "
+                ssRezPkgs << "mcrt_computation arras4_core moonshine_dwa "
                           << "moonshine-"
                           << std::getenv("REZ_MOONBASE_PROXIES_VERSION");
 
