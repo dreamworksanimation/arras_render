@@ -8,6 +8,8 @@ set(CMAKE_AUTOMOC TRUE)
 
 add_executable(${CmdName})
 
+target_compile_definitions(${CmdName} PRIVATE QT_NO_KEYWORDS)
+
 target_sources(${CmdName}
     PRIVATE
         CamPlayback.cc
