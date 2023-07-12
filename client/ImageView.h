@@ -4,10 +4,19 @@
 #ifndef IMAGE_VIEW_H_
 #define IMAGE_VIEW_H_
 
-#include "CamPlayback.h"
+#ifndef Q_MOC_RUN
+#include <scene_rdl2/scene/rdl2/BinaryWriter.h>
+#include <scene_rdl2/scene/rdl2/Camera.h>
+#include <scene_rdl2/scene/rdl2/Light.h>
+#include <scene_rdl2/scene/rdl2/SceneContext.h>
+#include <mcrt_dataio/client/receiver/ClientReceiverFb.h>
+#endif
+
+#include <sdk/sdk.h>
 #include "NotifiedValue.h"
-#include "FreeCam.h"
 #include "Scripting.h"
+#include "CamPlayback.h"
+#include "FreeCam.h"
 
 #include <atomic>
 #include <chrono>
@@ -27,14 +36,6 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-#include <scene_rdl2/scene/rdl2/BinaryWriter.h>
-#include <scene_rdl2/scene/rdl2/Camera.h>
-#include <scene_rdl2/scene/rdl2/Light.h>
-#include <scene_rdl2/scene/rdl2/SceneContext.h>
-
-#include <mcrt_dataio/client/receiver/ClientReceiverFb.h>
-
-#include <sdk/sdk.h>
 
 namespace ImageViewDefaults {
 const float DEFAULT_ZOOM_AMT = 20.0f;
@@ -63,7 +64,6 @@ public:
               const std::chrono::time_point<std::chrono::steady_clock>& renderStart = \
                   std::chrono::steady_clock::now(),
               QWidget* parent = 0);
-
     virtual ~ImageView();
     
     void displayFrame();
@@ -168,6 +168,7 @@ private:
     // Arras & Moonray
     std::mutex mSceneMux;
     std::shared_ptr<arras4::sdk::SDK> mSdk;
+
     std::shared_ptr<mcrt_dataio::ClientReceiverFb> mFbReceiver;
     std::unique_ptr<scene_rdl2::rdl2::SceneContext> mSceneCtx;
     const unsigned mAovInterval;
