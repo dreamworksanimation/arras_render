@@ -1,8 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
-//
-//
 #pragma once
 
 #include <scene_rdl2/common/grid_util/Parser.h>
@@ -173,4 +170,3 @@ protected:
 };
 
 } // namespace arras_render
-

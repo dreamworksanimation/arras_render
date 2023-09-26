@@ -1,6 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #ifndef NOTIFIED_VALUE_H_
 #define NOTIFIED_VALUE_H_
 
@@ -90,4 +89,3 @@ class NotifiedValue {
 };
 
 #endif // NOTIFIED_VALUE_H_
-

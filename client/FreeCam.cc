@@ -1,7 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
-
 #include "FreeCam.h"
 
 // must be between 0 and 1
@@ -198,7 +196,7 @@ FreeCam::update(float dt)
 }
 
 bool
-FreeCam::processKeyboardEvent(KeyEvent *event, bool pressed)
+FreeCam::processKeyboardEvent(KeyEvent* event, bool pressed)
 {
     bool used = false;
 
@@ -225,6 +223,18 @@ FreeCam::processKeyboardEvent(KeyEvent *event, bool pressed)
                     resetTransform(mInitialTransform, false);
                 }
                 break;
+            case Key_F :
+                mTelemetryOverlay = !mTelemetryOverlay;
+                used = false;
+                break;
+            case Key_G :
+                mSwitchTelemetryLayout = true;
+                used = false;
+                break;
+            case Key_N :
+                mDenoise = !mDenoise;
+                used = false;
+                break;
             default: used = false;
             }
         } else {
@@ -248,7 +258,7 @@ FreeCam::processKeyboardEvent(KeyEvent *event, bool pressed)
 
 
 bool
-FreeCam::processMousePressEvent(MouseEvent *event)
+FreeCam::processMousePressEvent(MouseEvent* event)
 {
     mMouseMode = NONE;
     if (event->buttons() == QT_LeftButton &&
@@ -269,7 +279,7 @@ FreeCam::processMousePressEvent(MouseEvent *event)
 }
 
 bool
-FreeCam::processMouseReleaseEvent(MouseEvent *event)
+FreeCam::processMouseReleaseEvent(MouseEvent* event)
 {
     if (event->button() == QT_LeftButton) {
         mMouseMode = NONE;
@@ -279,7 +289,7 @@ FreeCam::processMouseReleaseEvent(MouseEvent *event)
 }
 
 bool
-FreeCam::processMouseMoveEvent(MouseEvent *event)
+FreeCam::processMouseMoveEvent(MouseEvent* event)
 {
     if (mMouseMode == MOVE || mMouseMode == ROLL) {
         mMouseDeltaX += (event->x() - mMouseX); 
@@ -312,4 +322,3 @@ FreeCam::printCameraMatrices() const
     printMatrix("Full matrix containing rotation and position.", fullMat);
     printMatrix("Matrix containing world xz rotation and position.", zeroPitchMat);
 }
-

@@ -1,6 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #include "outputRate.h"
 
 #include <mcrt_messages/OutputRates.h>
@@ -27,4 +26,3 @@ setOutputRate(arras4::sdk::SDK& sdk,
 }
 
 } // end namespace
-

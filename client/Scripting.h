@@ -1,6 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #ifndef SCRIPTING_H_
 #define SCRIPTING_H_
 
@@ -33,4 +32,3 @@ public:
 };
 
 #endif /* SCRIPTING_H_ */
-

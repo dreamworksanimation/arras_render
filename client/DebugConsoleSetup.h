@@ -1,8 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
-//
-//
 #pragma once
 
 #include <mcrt_dataio/client/receiver/ClientReceiverConsoleDriver.h>
@@ -23,4 +20,3 @@ debugConsoleSetup(int port,
                   std::atomic<ImageView *> &imageView);
 
 } // namespace arras_render
-

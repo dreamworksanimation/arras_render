@@ -1,8 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
-//
-//
 #include "CamPlayback.h"
 
 #include <scene_rdl2/render/util/StrUtil.h>
@@ -551,4 +548,3 @@ CamPlayback::parserConfigure()
 }
 
 } // namespace arras_render
-

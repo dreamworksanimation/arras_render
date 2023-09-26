@@ -1,7 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
-//
 #include "NavigationCam.h"
 
 #include <sstream>
@@ -37,5 +35,3 @@ MouseEvent::show() const
          << "}";
     return ostr.str();
 }
-
-

@@ -1,6 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #include "DebugConsoleSetup.h"
 
 #include <atomic>
@@ -149,6 +148,7 @@ parseCmdLine(int argc, char* argv[],
         ("overlay", bpo::bool_switch()->default_value(false), "Display progress info in an overlay in the gui window")
         ("overlayFont", bpo::value<std::string>()->default_value(ImageViewDefaults::DEFAULT_FONT_NAME), "Font to use when overlay is enabled")
         ("overlaySize", bpo::value<int>()->default_value(ImageViewDefaults::DEFAULT_FONT_SIZE), "Font size to use when overlay is enabled")
+        ("telemetry", bpo::bool_switch()->default_value(false), "Display telemetry info in an overlay in the gui window")
         ("rdl", bpo::value<std::vector<std::string>>()->multitoken(), "Path to RDL input file(s)")
         ("exr", bpo::value<std::string>(), "Path to output EXR file")
         ("rez-context", bpo::bool_switch()->default_value(false), "Client to resolve rez_context and send with session request, supersedes rez-context-file")
@@ -557,11 +557,19 @@ messageHandler(std::shared_ptr<arras4::sdk::SDK> pSdk,
         printFrameStats(pSdk, *frameMsg);
 
         size_t totalSize = sizeof(mcrt::ProgressiveFrame);
-        pFbReceiver->decodeProgressiveFrame(*frameMsg, true,
-                                            [&]() {} /*no-op callback for started condition */,
-                                            [&](const std::string &comment) { // genericComment callBack func
-                                                std::cerr << ">> main.cc " << comment << '\n';
-                                            });
+        {
+            if (pImageView) {
+                pImageView.load()->getFrameMux().lock();
+            }
+            pFbReceiver->decodeProgressiveFrame(*frameMsg, true,
+                                                [&]() {} /*no-op callback for started condition */,
+                                                [&](const std::string &comment) { // genericComment callBack func
+                                                    std::cerr << ">> main.cc " << comment << '\n';
+                                                });
+            if (pImageView) {
+                pImageView.load()->getFrameMux().unlock();
+            }
+        }
         for (size_t i=0; i < frameMsg->mBuffers.size(); i++) {
             totalSize += sizeof(mcrt::BaseFrame::DataBuffer);
             totalSize += frameMsg->mBuffers[i].mDataLength;
@@ -571,6 +579,8 @@ messageHandler(std::shared_ptr<arras4::sdk::SDK> pSdk,
             // If getProgress() returns a negative value, image data is not received yet.
             if (pImageView != nullptr) {
                 pImageView.load()->displayFrame();
+            } else {
+                std::cerr << ">> main.cc pImageView is nullptr!!!\n";
             }
 
             if (isFinal(*frameMsg) && !exrFileName.empty()) {
@@ -949,7 +959,6 @@ main(int argc, char* argv[])
     } else {
         sessionName = DEFAULT_PROG_SESSION_NAME;
     }
-
     unsigned aovInterval = cmdOpts["aov-interval"].as<unsigned>();
 
     std::chrono::time_point<std::chrono::steady_clock> sessionCreateStart = std::chrono::steady_clock::now();
@@ -961,38 +970,42 @@ main(int argc, char* argv[])
     }
 
     int exitStatus = 0;
-    bool keepGoing = createNewSession(*pSdk,
-                                      *pSceneCtx,
-                                      sessionName,
-                                      numMcrtMin,
-                                      numMcrtMax,
-                                      aovInterval,
-                                      cmdOpts,
-                                      exitStatus);
-
-    if (!keepGoing)
-        return exitStatus;
-        
 
     pSdk->progress("Session created"s);
     if (guiMode) {
+        // We want to construct ImageView before createnewSession when it is guiMode.
         QApplication app(argc, argv);
-        ImageView imageView(pSdk,
-                            pFbReceiver,
-                            std::move(pSceneCtx),
-                            cmdOpts["overlay"].as<bool>(),
-                            cmdOpts["overlayFont"].as<std::string>(),
-                            cmdOpts["overlaySize"].as<int>(),
-                            sessionName,
-                            numMcrtMin,
-                            numMcrtMax,
-                            aovInterval,
-                            cmdOpts["script"].as<std::string>(),
-                            cmdOpts["exit-after-script"].as<bool>(),
-                            minUpdateInterval,
-                            cmdOpts["no-scale"].as<bool>());
-        imageView.show();
-        pImageView.store(&imageView);
+        ImageView* imageView = new ImageView(pFbReceiver,
+                                             std::move(pSceneCtx),
+                                             cmdOpts["overlay"].as<bool>(),
+                                             cmdOpts["overlayFont"].as<std::string>(),
+                                             cmdOpts["overlaySize"].as<int>(),
+                                             sessionName,
+                                             numMcrtMin,
+                                             numMcrtMax,
+                                             aovInterval,
+                                             cmdOpts["script"].as<std::string>(),
+                                             cmdOpts["exit-after-script"].as<bool>(),
+                                             minUpdateInterval,
+                                             cmdOpts["no-scale"].as<bool>());
+        imageView->getFbReceiver()->setTelemetryOverlayActive(cmdOpts["telemetry"].as<bool>());
+        pImageView.store(imageView);
+
+        std::cerr << ">> main.cc guiMode special createNewSession after imageView construction\n";
+        if (!createNewSession(*pSdk,
+                              pImageView.load()->getSceneContext2(),
+                              sessionName,
+                              numMcrtMin,
+                              numMcrtMax,
+                              aovInterval,
+                              cmdOpts,
+                              exitStatus)) {
+            return exitStatus;
+        }
+        std::cerr << ">> main.cc guiMode special createNewSession completed\n";
+
+        pImageView.load()->setup(pSdk);
+        pImageView.load()->show();
 
         if (cmdOpts.count("debug-console")) {
             int port = cmdOpts["debug-console"].as<int>();
@@ -1002,7 +1015,7 @@ main(int argc, char* argv[])
         }
 
         if (cmdOpts["run-script"].as<bool>()) {
-            imageView.handleRunScript();
+            pImageView.load()->handleRunScript();
         }
 
         exitStatus = app.exec();
@@ -1017,8 +1030,30 @@ main(int argc, char* argv[])
             pSdk->disconnect();
         }
     } else if (benchmarkMode) {
+        if (!createNewSession(*pSdk,
+                              *pSceneCtx,
+                              sessionName,
+                              numMcrtMin,
+                              numMcrtMax,
+                              aovInterval,
+                              cmdOpts,
+                              exitStatus)) {
+            return exitStatus;
+        }
+
         execBenchmark(pSdk, std::move(pSceneCtx));
     } else {
+        if (!createNewSession(*pSdk,
+                              *pSceneCtx,
+                              sessionName,
+                              numMcrtMin,
+                              numMcrtMax,
+                              aovInterval,
+                              cmdOpts,
+                              exitStatus)) {
+            return exitStatus;
+        }
+
         // not in gui mode just sleep the main thread until we are done
         // or something bad happened
         while(!frameWritten && pSdk->isConnected() && !arrasExceptionThrown && !arrasStopped) {
@@ -1040,4 +1075,3 @@ main(int argc, char* argv[])
 
     return exitStatus;
 }
-

@@ -22,6 +22,9 @@
 /// R                   - reset to original startup location in world
 /// U                   - upright camera (remove roll)
 /// T                   - print current camera matrix to console in lua format
+/// F                   - telemetry overlay enable/disable toggle
+/// G                   - switch telemetry layout
+/// N                   - denoise on/off
 ///
 
 #pragma once
@@ -39,11 +42,20 @@ public:
     scene_rdl2::math::Mat4f  update(float dt) override;
 
     /// Returns true if the input was used, false if discarded.
-    bool                processKeyboardEvent(KeyEvent *event, bool pressed) override;
-    bool                processMousePressEvent(MouseEvent *event) override;
-    bool                processMouseReleaseEvent(MouseEvent *event) override;
-    bool                processMouseMoveEvent(MouseEvent *event) override;
+    bool                processKeyboardEvent(KeyEvent* event, bool pressed) override;
+    bool                processMousePressEvent(MouseEvent* event) override;
+    bool                processMouseReleaseEvent(MouseEvent* event) override;
+    bool                processMouseMoveEvent(MouseEvent* event) override;
     void                clearMovementState() override;
+
+    void setTelemetryOverlay(bool sw) { mTelemetryOverlay = sw; }
+    bool getTelemetryOverlay() const { return mTelemetryOverlay; }
+
+    void initSwitchTelemetryLayout() { mSwitchTelemetryLayout = false; }
+    bool getSwitchTelemetryLayout() const { return mSwitchTelemetryLayout; }
+
+    void setDenoise(bool sw) { mDenoise = sw; }
+    bool getDenoise() const { return mDenoise; }
 
 private:        
     enum MouseMode
@@ -72,5 +84,8 @@ private:
 
     bool                mInitialTransformSet;
     scene_rdl2::math::Mat4f  mInitialTransform;
-};
 
+    bool mTelemetryOverlay {false};
+    bool mSwitchTelemetryLayout {false};
+    bool mDenoise {false};
+};

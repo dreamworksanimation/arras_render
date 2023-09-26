@@ -1,7 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
-
 #pragma once
 #include <scene_rdl2/common/math/Mat4.h>
 
@@ -166,4 +164,3 @@ public:
     virtual bool        processMouseMoveEvent(MouseEvent *event) { return false; }
     virtual void        clearMovementState() {};
 };
-

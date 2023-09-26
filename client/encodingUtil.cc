@@ -1,6 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #include "encodingUtil.h"
 
 #include <cassert>
@@ -79,4 +78,3 @@ writeExrFile(const std::string& exrFileName, mcrt_dataio::ClientReceiverFb& fbRe
 }
 
 } // end namespace
-

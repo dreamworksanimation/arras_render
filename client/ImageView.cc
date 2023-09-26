@@ -1,6 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #include "ImageView.h"
 
 #include <algorithm> // std::find
@@ -56,9 +55,7 @@ const std::string WINDOW_ICON = ":/window-icon.png";
 
 using namespace arras_render;
 
-
-ImageView::ImageView(std::shared_ptr<arras4::sdk::SDK>& sdk,
-                     std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
+ImageView::ImageView(std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
                      std::unique_ptr<scene_rdl2::rdl2::SceneContext> sceneCtx,
                      bool overlay,
                      const std::string& overlayFontName,
@@ -98,7 +95,6 @@ ImageView::ImageView(std::shared_ptr<arras4::sdk::SDK>& sdk,
     , mButColor(nullptr)
     , mFont(nullptr)
     , mFontColor(nullptr)
-    , mSdk(sdk)
     , mFbReceiver(pFbReceiver)
     , mSceneCtx(std::move(sceneCtx))
     , mAovInterval(aovInterval)
@@ -137,6 +133,9 @@ ImageView::ImageView(std::shared_ptr<arras4::sdk::SDK>& sdk,
     mImgWidth = sceneVars.getRezedWidth();
     mImgHeight = sceneVars.getRezedHeight();
 
+    // update telemetry overlay resolution as the same as image reso
+    mFbReceiver->setTelemetryOverlayReso(mImgWidth, mImgHeight);
+
     // choose an initial scale to keep the image a reasonable size
     if (mImgWidth > TARGET_WIDTH  && !noInitialScale) {
         mImgScale = static_cast<unsigned int>(ceil(static_cast<float>(mImgWidth)/TARGET_WIDTH));
@@ -145,10 +144,14 @@ ImageView::ImageView(std::shared_ptr<arras4::sdk::SDK>& sdk,
     if ((mImgHeight/mImgScale) > TARGET_HEIGHT && !noInitialScale) {
         mImgScale = static_cast<unsigned int>(ceil(static_cast<float>(mImgHeight)/TARGET_HEIGHT));
     }
-    
+
     unsigned int width = mImgWidth / mImgScale;
     unsigned int height = mImgHeight / mImgScale;
     mImage->setFixedSize(width, height);
+
+    // Update telemetry overlay resolution for zoom action.
+    // (but needs more future work and is currently skipped)
+    // mFbReceiver->setTelemetryOverlayReso(width, height);
 
     // put the the image in a scrollable area
     mScrollArea->setWidget(mImage.get());
@@ -210,8 +213,7 @@ ImageView::ImageView(std::shared_ptr<arras4::sdk::SDK>& sdk,
     } else {
         setLayout(mMainLayout.get());
     }
-
-
+    
     initCam();
     initImage();
 
@@ -273,6 +275,12 @@ ImageView::ImageView(std::shared_ptr<arras4::sdk::SDK>& sdk,
     } else {
         mButRunScript->setDisabled(true);
     }
+}
+
+void
+ImageView::setup(std::shared_ptr<arras4::sdk::SDK>& sdk)
+{
+    mSdk = sdk;
 }
 
 ImageView::~ImageView()
@@ -352,11 +360,25 @@ ImageView::displayFrame()
 
     if (!mReceivedFirstFrame) {
         mReceivedFirstFrame = true;
+        /*
+        //
+        // We don¡Çt need to update the image reso here.Because these values have been already set up
+        // at construction time by sceneVariables. However, we have to reconsider the resolution change
+        // during sessions and not support it at this moment. This is a future task.
+        //
         mImgWidth = mFbReceiver->getWidth();
         mImgHeight = mFbReceiver->getHeight();
+        */
+        std::cerr << ">> ImageView.cc displayFrame() FirstFrame mImgWidth:" << mImgWidth << " mImgHeight:" << mImgHeight << '\n';
     }
 
     Q_EMIT displayFrameSignal();
+}
+
+void
+ImageView::setInitialCondition()
+{
+    mRgbFrame.clear();
 }
 
 void
@@ -367,6 +389,8 @@ ImageView::clearDisplayFrame()
     mRenderStart = std::chrono::steady_clock::now();
     displayFrame();
     mBlankDisplay = false;
+
+    setInitialCondition(); // This makes the rgbFrame condition as very beginning of the process.
 }
 
 void
@@ -631,6 +655,9 @@ ImageView::changeImageSize(int width, int height)
     unsigned h = mImgHeight / mImgScale;
     mImage->setFixedSize(w, h);
 
+    // Update telemetry overlay resolution for zoom action.
+    // (but needs more future work and is currently skipped)
+    // mFbReceiver->setTelemetryOverlayReso(w, h);
     {
         scene_rdl2::rdl2::SceneVariables &sceneVars = mSceneCtx->getSceneVariables();
         scene_rdl2::rdl2::SceneVariables::UpdateGuard guard(&sceneVars);
@@ -895,6 +922,10 @@ ImageView::handleScaleSelect(int index)
     QSize buttonSize = mButtonRow->sizeHint();
     setMaximumSize(width+40, height+buttonSize.height()+32);
 
+    // Update telemetry overlay resolution for zoom action.
+    // (but needs more future work and is currently skipped)
+    // mFbReceiver->setTelemetryOverlayReso(width, height);
+
     displayFrameSlot();
 }
 
@@ -1063,16 +1094,50 @@ ImageView::mouseMoveEvent(QMouseEvent *aMouseEvent)
 void
 ImageView::keyPressEvent(QKeyEvent * aKeyEvent)
 {
+    auto getDenoiseCondition = [&]() {
+        return (getFbReceiver()->getBeautyDenoiseMode() != mcrt_dataio::ClientReceiverFb::DenoiseMode::DISABLE);
+    };
+    auto setDenoiseCondition = [&](bool flag) {
+        if (flag) {
+            getFbReceiver()->setBeautyDenoiseMode(mcrt_dataio::ClientReceiverFb::DenoiseMode::ENABLE);
+        } else {
+            getFbReceiver()->setBeautyDenoiseMode(mcrt_dataio::ClientReceiverFb::DenoiseMode::DISABLE);
+        }
+    };
+
+    mFreeCamera.setTelemetryOverlay(getFbReceiver()->getTelemetryOverlayActive());
+    mFreeCamera.setDenoise(getDenoiseCondition());
+    mFreeCamera.initSwitchTelemetryLayout();
+
     KeyEvent evt(1,aKeyEvent->key(),aKeyEvent->modifiers());
-    mFreeCamera.processKeyboardEvent(&evt, true);
-    sendCamUpdate(1.0f);
+    if (mFreeCamera.processKeyboardEvent(&evt, true)) {
+        sendCamUpdate(1.0f);
+    } else {
+        if (mFreeCamera.getTelemetryOverlay()) {
+            mFbReceiver->setTelemetryOverlayActive(true);
+        } else {
+            mFbReceiver->setTelemetryOverlayActive(false);
+        }
+
+        if (mFbReceiver->getTelemetryOverlayActive()) {
+            if (mFreeCamera.getSwitchTelemetryLayout()) {
+                mFbReceiver->switchTelemetryLayoutNext();
+            }
+        }
+
+        if (mFreeCamera.getDenoise()) {
+            setDenoiseCondition(true);
+        } else {
+            setDenoiseCondition(false);
+        }
+    }
 }
 
 void
 ImageView::keyReleaseEvent(QKeyEvent * aKeyEvent)
 {
     KeyEvent evt(2,aKeyEvent->key(),aKeyEvent->modifiers());
-    mFreeCamera.processKeyboardEvent(&evt, false);
-    sendCamUpdate(1.0f);
+    if (mFreeCamera.processKeyboardEvent(&evt, false)) {
+        sendCamUpdate(1.0f);
+    }
 }
-

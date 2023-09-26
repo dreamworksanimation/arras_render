@@ -1,6 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #include "ImageView.h"
 #include "NotifiedValue.h"
 #include "Scripting.h"
@@ -228,5 +227,3 @@ Scripting::init(ImageView* imageView, const std::string& scriptName, bool exitOn
     mScriptEngine->globalObject().setProperty("setStatusOverlay", mScriptEngine->newFunction(scriptSetStatusOverlay, 0));
     mScriptEngine->globalObject().setProperty("clearStatusOverlay", mScriptEngine->newFunction(scriptClearStatusOverlay, 0));
 }
-
-

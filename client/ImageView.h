@@ -1,6 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #ifndef IMAGE_VIEW_H_
 #define IMAGE_VIEW_H_
 
@@ -36,7 +35,6 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-
 namespace ImageViewDefaults {
 const float DEFAULT_ZOOM_AMT = 20.0f;
 const std::string DEFAULT_FONT_NAME("Arial");
@@ -47,8 +45,7 @@ class ImageView : public QWidget
 {
     Q_OBJECT
 public:
-    ImageView(std::shared_ptr<arras4::sdk::SDK>& sdk,
-              std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
+    ImageView(std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
               std::unique_ptr<scene_rdl2::rdl2::SceneContext> sceneCtx,
               bool overlay=false,
               const std::string& overlayFontName=ImageViewDefaults::DEFAULT_FONT_NAME,
@@ -66,6 +63,12 @@ public:
               QWidget* parent = 0);
     virtual ~ImageView();
     
+    void setup(std::shared_ptr<arras4::sdk::SDK>& sdk);
+
+    std::mutex& getFrameMux() { return mFrameMux; }
+
+    void setInitialCondition();
+
     void displayFrame();
     void clearDisplayFrame();
     void exitProgram();
@@ -86,6 +89,7 @@ public:
     void setOverlayParam(unsigned offsetX, unsigned offsetY, unsigned fontSize);
 
     const scene_rdl2::rdl2::SceneContext *getSceneContext() const { return mSceneCtx.get(); }
+    scene_rdl2::rdl2::SceneContext& getSceneContext2() { return *mSceneCtx; }
     std::shared_ptr<mcrt_dataio::ClientReceiverFb> getFbReceiver() const { return mFbReceiver; }
     arras_render::CamPlayback& getCamPlayback() { return mCamPlayback; }
 
@@ -212,4 +216,3 @@ private:
 };
 
 #endif /* IMAGE_VIEW_H_ */
-

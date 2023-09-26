@@ -1,8 +1,5 @@
 // Copyright 2023 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
-//
-//
 #include "DebugConsoleSetup.h"
 #include "ImageView.h"
 
@@ -184,4 +181,3 @@ debugConsoleSetup(int port,
 }
 
 } // namespace arras_render
-
