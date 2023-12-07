@@ -23,7 +23,10 @@
 /// U                   - upright camera (remove roll)
 /// T                   - print current camera matrix to console in lua format
 /// F                   - telemetry overlay enable/disable toggle
-/// G                   - switch telemetry layout
+/// G, Apostrophe(')    - switch telemetry panel to next
+/// Semicolon(;)        - switch telemetry panel to previous
+/// SquareBracketOpen([)- switch telemetry panel to parent
+/// Slash(/)            - switch telemetry panel to child
 /// N                   - denoise on/off
 ///
 
@@ -51,8 +54,16 @@ public:
     void setTelemetryOverlay(bool sw) { mTelemetryOverlay = sw; }
     bool getTelemetryOverlay() const { return mTelemetryOverlay; }
 
-    void initSwitchTelemetryLayout() { mSwitchTelemetryLayout = false; }
-    bool getSwitchTelemetryLayout() const { return mSwitchTelemetryLayout; }
+    void initSwitchTelemetryPanel() {
+        mSwitchTelemetryPanelToParent = false;
+        mSwitchTelemetryPanelToNext = false;
+        mSwitchTelemetryPanelToPrev = false;
+        mSwitchTelemetryPanelToChild = false;
+    }
+    bool getSwitchTelemetryPanelToParent() const { return mSwitchTelemetryPanelToParent; }
+    bool getSwitchTelemetryPanelToNext() const { return mSwitchTelemetryPanelToNext; }
+    bool getSwitchTelemetryPanelToPrev() const { return mSwitchTelemetryPanelToPrev; }
+    bool getSwitchTelemetryPanelToChild() const { return mSwitchTelemetryPanelToChild; }
 
     void setDenoise(bool sw) { mDenoise = sw; }
     bool getDenoise() const { return mDenoise; }
@@ -86,6 +97,9 @@ private:
     scene_rdl2::math::Mat4f  mInitialTransform;
 
     bool mTelemetryOverlay {false};
-    bool mSwitchTelemetryLayout {false};
+    bool mSwitchTelemetryPanelToParent {false};
+    bool mSwitchTelemetryPanelToNext {false};
+    bool mSwitchTelemetryPanelToPrev {false};
+    bool mSwitchTelemetryPanelToChild {false};
     bool mDenoise {false};
 };

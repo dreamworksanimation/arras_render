@@ -93,6 +93,15 @@ NotifiedValue<float> progressPercent(0.0);
 std::atomic<bool> benchmarkMode(false);
 std::atomic<bool> showStats(false); // show ClientReceiverFb's statistical info
 
+void
+setTelemetryClientMessage(const std::string& msg)
+{
+    if (pImageView) {
+        pImageView.load()->getFbReceiver()->setClientMessage(msg);
+        pImageView.load()->displayFrame();
+    }
+}
+
 const std::string
 getStudioName()
 {
@@ -149,6 +158,7 @@ parseCmdLine(int argc, char* argv[],
         ("overlayFont", bpo::value<std::string>()->default_value(ImageViewDefaults::DEFAULT_FONT_NAME), "Font to use when overlay is enabled")
         ("overlaySize", bpo::value<int>()->default_value(ImageViewDefaults::DEFAULT_FONT_SIZE), "Font size to use when overlay is enabled")
         ("telemetry", bpo::bool_switch()->default_value(false), "Display telemetry info in an overlay in the gui window")
+        ("telemetryPanel", bpo::value<std::string>()->default_value(""s), "set initial telemetry panel name")
         ("rdl", bpo::value<std::vector<std::string>>()->multitoken(), "Path to RDL input file(s)")
         ("exr", bpo::value<std::string>(), "Path to output EXR file")
         ("rez-context", bpo::bool_switch()->default_value(false), "Client to resolve rez_context and send with session request, supersedes rez-context-file")
@@ -326,6 +336,12 @@ getSessionDefinition(const std::string& sessionName,
             std::string rezContextFile(cmdOpts["rez-context-file"].as<std::string>());
             ARRAS_LOG_DEBUG("Reading computation context from "+rezContextFile);
             std::ifstream ctxfile(rezContextFile);
+            if (!ctxfile) {
+                std::ostringstream ostr;
+                ostr << "Could not open rezContextFile:" << rezContextFile;
+                throw std::runtime_error(ostr.str());
+            }
+
             ctxfile.seekg(0, std::ios::end);
             content.reserve(ctxfile.tellg());
             ctxfile.seekg(0, std::ios::beg);
@@ -431,6 +447,9 @@ connect(arras4::sdk::SDK& sdk,
         return false;
     } catch (const arras4::client::DefinitionLoadError& e) {
         ARRAS_LOG_ERROR("Failed to load session: %s", e.what());
+        return false;
+    } catch (const std::runtime_error& e) {
+        ARRAS_LOG_ERROR("Failed getSessionDefinition: %s", e.what());
         return false;
     }
 
@@ -712,15 +731,16 @@ createNewSession(arras4::sdk::SDK& sdk,
                  const bpo::variables_map& cmdOpts,
                  /*out*/int& exitStatus)
 {
-     std::chrono::time_point<std::chrono::steady_clock> sessionCreateStart = std::chrono::steady_clock::now();
-     if (!connect(sdk, sessionName, numMcrtMin, numMcrtMax, cmdOpts)) {
+    std::chrono::time_point<std::chrono::steady_clock> sessionCreateStart = std::chrono::steady_clock::now();
+    if (!connect(sdk, sessionName, numMcrtMin, numMcrtMax, cmdOpts)) {
         std::cerr << "Failed to connect!" << std::endl;
         exitStatus = 1;
         return false;
-     }
+    }
 
-     ARRAS_LOG_INFO("Waiting for engine ready");
-     bool ready = sdk.waitForEngineReady(cmdOpts["con-timeout"].as<unsigned short>());
+    ARRAS_LOG_INFO("Waiting for engine ready");
+    setTelemetryClientMessage("Waiting for engine ready");
+    bool ready = sdk.waitForEngineReady(cmdOpts["con-timeout"].as<unsigned short>());
 
     if (!sdk.isConnected() || !ready || arrasStopped) {
         std::cerr << "Failed to connect!" << std::endl;
@@ -747,6 +767,7 @@ createNewSession(arras4::sdk::SDK& sdk,
 
     bool rdlSent = false;
     ARRAS_LOG_INFO("Client connected");
+    setTelemetryClientMessage("Client connected");
     while(!rdlSent && sdk.isConnected() && !arrasExceptionThrown && !arrasStopped) {
         if (sdk.isEngineReady()) {
             if (aovInterval > 0) {
@@ -756,6 +777,7 @@ createNewSession(arras4::sdk::SDK& sdk,
             renderStart = std::chrono::steady_clock::now();
             sendRDL(sdk, sceneCtx);
             rdlSent = true;
+            setTelemetryClientMessage("sent RDL");
         }
 
         sleep(1);
@@ -925,7 +947,9 @@ main(int argc, char* argv[])
     }
 
     std::unique_ptr<scene_rdl2::rdl2::SceneContext> pSceneCtx(sceneFromRDLFiles(rdlFiles));
-    std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver = std::make_shared<mcrt_dataio::ClientReceiverFb>();
+    bool initialTelemetryOverlayCondition = cmdOpts["telemetry"].as<bool>();
+    std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver =
+        std::make_shared<mcrt_dataio::ClientReceiverFb>(initialTelemetryOverlayCondition);
     std::shared_ptr<arras4::sdk::SDK> pSdk = std::make_shared<arras4::sdk::SDK>();
 
     pSdk->setAsyncSend(); // async send mode
@@ -933,6 +957,7 @@ main(int argc, char* argv[])
     pFbReceiver->setInfoRecInterval(cmdOpts["infoRec"].as<float>());
     pFbReceiver->setInfoRecDisplayInterval(cmdOpts["infoRecDisp"].as<float>());
     pFbReceiver->setInfoRecFileName(cmdOpts["infoRecFile"].as<std::string>());
+    pFbReceiver->setTelemetryInitialPanel(cmdOpts["telemetryPanel"].as<std::string>());
 
     pSdk->setMessageHandler(std::bind(&messageHandler,
                                       pSdk,
@@ -988,37 +1013,51 @@ main(int argc, char* argv[])
                                              cmdOpts["exit-after-script"].as<bool>(),
                                              minUpdateInterval,
                                              cmdOpts["no-scale"].as<bool>());
-        imageView->getFbReceiver()->setTelemetryOverlayActive(cmdOpts["telemetry"].as<bool>());
         pImageView.store(imageView);
 
-        std::cerr << ">> main.cc guiMode special createNewSession after imageView construction\n";
-        if (!createNewSession(*pSdk,
-                              pImageView.load()->getSceneContext2(),
-                              sessionName,
-                              numMcrtMin,
-                              numMcrtMax,
-                              aovInterval,
-                              cmdOpts,
-                              exitStatus)) {
-            return exitStatus;
-        }
-        std::cerr << ">> main.cc guiMode special createNewSession completed\n";
+        setTelemetryClientMessage("imageView construction done");
 
-        pImageView.load()->setup(pSdk);
-        pImageView.load()->show();
-
-        if (cmdOpts.count("debug-console")) {
-            int port = cmdOpts["debug-console"].as<int>();
-            if (port > 0) {
-                arras_render::debugConsoleSetup(port, pSdk, pFbReceiver, pImageView);
+        auto qtExec = [&]() {
+            pImageView.load()->show();
+            exitStatus = app.exec();
+        };
+            
+        auto setupSession = [&]() {
+            if (!createNewSession(*pSdk,
+                                  pImageView.load()->getSceneContext2(),
+                                  sessionName,
+                                  numMcrtMin,
+                                  numMcrtMax,
+                                  aovInterval,
+                                  cmdOpts,
+                                  exitStatus)) {
+                std::cerr << ">> main.cc ERROR : createNewSession() failed\n";
+                return;
             }
-        }
+            pImageView.load()->setup(pSdk);
 
-        if (cmdOpts["run-script"].as<bool>()) {
-            pImageView.load()->handleRunScript();
-        }
+            if (cmdOpts.count("debug-console")) {
+                int port = cmdOpts["debug-console"].as<int>();
+                if (port > 0) {
+                    arras_render::debugConsoleSetup(port, pSdk, pFbReceiver, pImageView);
+                }
+            }
 
-        exitStatus = app.exec();
+            if (cmdOpts["run-script"].as<bool>()) {
+                pImageView.load()->handleRunScript();
+            }
+        };
+
+        try {
+            // We run the session setup function as an independent thread
+            // in order to display Qt window as soon as possible.
+            std::thread th2(setupSession);
+            qtExec();
+            th2.join();
+        }
+        catch (std::exception &e) {
+            std::cerr << e.what() << '\n';
+        }
 
         // close down the connection before ImageView gets destroyed. Otherwise
         // the message handler thread might be using ImageView when it is destroyed

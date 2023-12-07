@@ -75,6 +75,12 @@ const int Key_6 = 0x36;
 const int Key_7 = 0x37;
 const int Key_8 = 0x38;
 const int Key_9 = 0x39;
+
+const int Key_APOSTROPHE         = 0x27; // '
+const int Key_SEMICOLON          = 0x3b; // ;
+const int Key_SQUAREBRACKET_OPEN = 0x5b; // [
+const int Key_SLASH              = 0x2f; // /
+
 const int Key_Space = 0x20;
 const int Key_Enter = 0x01000004;
 

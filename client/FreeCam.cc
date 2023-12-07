@@ -227,15 +227,31 @@ FreeCam::processKeyboardEvent(KeyEvent* event, bool pressed)
                 mTelemetryOverlay = !mTelemetryOverlay;
                 used = false;
                 break;
+            case Key_SQUAREBRACKET_OPEN :
+                mSwitchTelemetryPanelToParent = true;
+                used = false;
+                break;
             case Key_G :
-                mSwitchTelemetryLayout = true;
+            case Key_APOSTROPHE : 
+                mSwitchTelemetryPanelToNext = true;
+                used = false;
+                break;
+            case Key_SEMICOLON :
+                mSwitchTelemetryPanelToPrev = true;
+                used = false;
+                break;
+            case Key_SLASH :
+                mSwitchTelemetryPanelToChild = true;
                 used = false;
                 break;
             case Key_N :
                 mDenoise = !mDenoise;
                 used = false;
                 break;
-            default: used = false;
+            default:
+                used = false;
+                // std::cerr << ">> FreeCam.cc key:0x" << std::hex << event->key() << '\n'; // useful debug message
+                break;
             }
         } else {
             // Check for released keys.

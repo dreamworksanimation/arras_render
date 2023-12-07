@@ -37,6 +37,9 @@
 #include "encodingUtil.h"
 #include "outputRate.h"
 
+//#define DEBUG_MSG_DISPLAY_FRAME
+//#define DEBUG_MSG_POPULATE_RGB_FRAME
+
 namespace {
 constexpr int TARGET_WIDTH = 960;
 constexpr int TARGET_HEIGHT = 600;
@@ -341,8 +344,13 @@ ImageView::displayFrame()
     //        std::cout << "Ignoring this frame because it's for an old render\n";
     //        return;
     //    }
-
+#ifdef DEBUG_MSG_DISPLAY_FRAME
+    std::cerr << ">> ImageView.cc displayFrame() passA\n";
+#endif // end DEBUG_MSG_DISPLAY_FRAME
     populateRGBFrame();
+#ifdef DEBUG_MSG_DISPLAY_FRAME
+    std::cerr << ">> ImageView.cc displayFrame() passB\n";
+#endif // end DEBUG_MSG_DISPLAY_FRAME
     // Check to see if we received any new outputs (aka AOVs aka buffers)
     // in the first frame we will receive an initial list of outputs,
     // if the client is using AOV Output Rate Control then later frames
@@ -397,16 +405,28 @@ void
 ImageView::populateRGBFrame()
 {
     if (mBlankDisplay) {
+#ifdef DEBUG_MSG_POPULATE_RGB_FRAME
+        std::cerr << ">> ImageView.cc populateRGBFrame() before memset()\n";
+#endif DEBUG_MSG_POPULATE_RGB_FRAME
         std::memset(&mRgbFrame[0], 0, mRgbFrame.size());
+#ifdef DEBUG_MSG_POPULATE_RGB_FRAME
+        std::cerr << ">> ImageView.cc populateRGBFrame() after memset()\n";
+#endif DEBUG_MSG_POPULATE_RGB_FRAME
         return;
     }
 
     if (mCurrentOutput == BEAUTY_PASS) {
+#ifdef DEBUG_MSG_POPULATE_RGB_FRAME
+        std::cerr << ">> ImageView.cc populateRGBFrame() before getBeautyRgb888()\n";
+#endif // end DEBUG_MSG_POPULATE_RGB_FRAME
         if (!mFbReceiver->getBeautyRgb888(mRgbFrame,
                                           true,
                                           false)) {
             std::cerr << "populateRGBFrame() failed. " << mFbReceiver->getErrorMsg() << '\n';
         }
+#ifdef DEBUG_MSG_POPULATE_RGB_FRAME
+        std::cerr << ">> ImageView.cc populateRGBFrame() after getBeautyRgb888()\n";
+#endif // end DEBUG_MSG_POPULATE_RGB_FRAME
     } else if (mCurrentOutput == PIXINFO_PASS) {
         if (mFbReceiver->getPixelInfoStatus()) {
             mFbReceiver->getPixelInfoRgb888(mRgbFrame,
@@ -1107,7 +1127,7 @@ ImageView::keyPressEvent(QKeyEvent * aKeyEvent)
 
     mFreeCamera.setTelemetryOverlay(getFbReceiver()->getTelemetryOverlayActive());
     mFreeCamera.setDenoise(getDenoiseCondition());
-    mFreeCamera.initSwitchTelemetryLayout();
+    mFreeCamera.initSwitchTelemetryPanel();
 
     KeyEvent evt(1,aKeyEvent->key(),aKeyEvent->modifiers());
     if (mFreeCamera.processKeyboardEvent(&evt, true)) {
@@ -1120,8 +1140,14 @@ ImageView::keyPressEvent(QKeyEvent * aKeyEvent)
         }
 
         if (mFbReceiver->getTelemetryOverlayActive()) {
-            if (mFreeCamera.getSwitchTelemetryLayout()) {
-                mFbReceiver->switchTelemetryLayoutNext();
+            if (mFreeCamera.getSwitchTelemetryPanelToParent()) {
+                mFbReceiver->switchTelemetryPanelToParent();                
+            } else if (mFreeCamera.getSwitchTelemetryPanelToNext()) {
+                mFbReceiver->switchTelemetryPanelToNext();
+            } else if (mFreeCamera.getSwitchTelemetryPanelToPrev()) {
+                mFbReceiver->switchTelemetryPanelToPrev();
+            } else if (mFreeCamera.getSwitchTelemetryPanelToChild()) {
+                mFbReceiver->switchTelemetryPanelToChild();
             }
         }
 
