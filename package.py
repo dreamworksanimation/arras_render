@@ -37,7 +37,7 @@ variants = [
 requires = [
     # Arras deps
     "arras4_core-4.10",
-        
+
     # MCRT
     "mcrt_dataio-13.7",
     'moonbase_proxies-12.9',

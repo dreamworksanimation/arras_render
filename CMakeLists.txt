@@ -3,7 +3,7 @@
 
 cmake_minimum_required (VERSION 3.23.1)
 
-include(packageVersion)  # Sets versionString, projectString and PACKAGE_NAME
+include(OMR_PackageVersion)  # Sets versionString, projectString and PACKAGE_NAME
 project(${projectString}
     VERSION ${versionString}
     LANGUAGES CXX)
@@ -14,6 +14,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 string(TOUPPER ${PROJECT_NAME} PROJECT_NAME_UPPER)
 list(APPEND CMAKE_MESSAGE_CONTEXT ${PROJECT_NAME})
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
+include(OMR_Platform)
 
 # ================================================
 # Options
@@ -31,6 +33,7 @@ find_package(Boost REQUIRED
   COMPONENTS
     chrono
     program_options
+    filesystem
 )
 
 find_package(JPEG REQUIRED)

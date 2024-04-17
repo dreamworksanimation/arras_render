@@ -33,6 +33,7 @@ target_link_libraries(${CmdName}
         SceneRdl2::scene_rdl2
         Boost::chrono
         Boost::program_options
+        Boost::filesystem
         ${IMATHHALF}
         JPEG::JPEG
         OpenImageIO::OpenImageIO
