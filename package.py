@@ -43,7 +43,7 @@ requires = [
     'moonbase_proxies-12.9',
     "mcrt_messages-12.1",
     "scene_rdl2-13.4",
-        
+
     # Third party deps
     "boost",
     "jsoncpp-1.9.5",
@@ -53,7 +53,7 @@ requires = [
 
 
 private_build_requires = [
-    'cmake_modules',
+    'cmake_modules-1.0',
     'cppunit',
     'qt'
 ]
