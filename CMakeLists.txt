@@ -53,15 +53,11 @@ if("${PROJECT_NAME}" STREQUAL "${CMAKE_PROJECT_NAME}")
 endif()
 find_package(Qt5 COMPONENTS Core Gui Widgets Script REQUIRED)
 
-# ================================================
 # Set the RPATH for binaries in the install tree
-# ================================================
-set(CMAKE_INSTALL_RPATH $ORIGIN $ORIGIN/../lib64)
+set(CMAKE_INSTALL_RPATH ${GLOBAL_INSTALL_RPATH})
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-# ===============================================
 # Set the install directory for rdl2 dsos
-# ===============================================
 set(RDL2DSO_INSTALL_DIR rdl2dso)
 set(RDL2DSO_PROXY_INSTALL_DIR rdl2dso.proxy)
 
