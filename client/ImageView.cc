@@ -36,6 +36,7 @@
 
 #include <scene_rdl2/common/math/Color.h>
 #include <scene_rdl2/common/math/Mat4.h>
+#include <scene_rdl2/scene/rdl2/BinaryReader.h>
 #include <scene_rdl2/scene/rdl2/SceneObject.h>
 #include <scene_rdl2/scene/rdl2/Types.h>
 
@@ -621,8 +622,9 @@ ImageView::setStatusOverlay(short index, std::string message)
 
 //------------------------------------------------------------------------------------------
 
-void
-ImageView::sendCommand(const std::string &cmd)
+bool
+ImageView::sendCommand(const std::string &cmd,
+                       const MsgCallBack& msgCallBack)
 //
 // for debug console
 //
@@ -643,20 +645,31 @@ ImageView::sendCommand(const std::string &cmd)
         mSceneCtx->commitAllChanges();
         mSdk->sendMessage(rdlMsg);
         mRenderStart = std::chrono::steady_clock::now();
-    } else if (cmd == "sendStart") {
-        handleStartStop(true);
-    } else if (cmd == "sendStop") {
-        handleStartStop(false);
-    }
-}
 
-void
-ImageView::sendCommand(std::function<const arras4::api::MessageContentConstPtr()> callBack)
-//
-// for debug console
-//
-{
-    mSdk->sendMessage(callBack());
+        if (!msgCallBack("sendWholeScene\n")) return false;
+        
+    } else if (cmd == "sendEmptyScene") {
+        scene_rdl2::rdl2::BinaryWriter w(*mSceneCtx);
+        w.setDeltaEncoding(true);
+
+        mcrt::RDLMessage::Ptr rdlMsg = std::make_shared<mcrt::RDLMessage>();
+        w.toBytes(rdlMsg->mManifest, rdlMsg->mPayload);
+        rdlMsg->mForceReload = false;
+
+        if (!msgCallBack(scene_rdl2::rdl2::BinaryReader::showManifest(rdlMsg->mManifest) + '\n')) return false;
+
+        mRenderProgress = 0.0;
+        mRenderInstance = mRenderInstance + 1;
+        rdlMsg->mSyncId = static_cast<int>(mRenderInstance);
+
+        mSceneCtx->commitAllChanges(); // just in case
+        mSdk->sendMessage(rdlMsg);
+        mRenderStart = std::chrono::steady_clock::now();
+
+        if (!msgCallBack("sendEmptyScene\n")) return false;
+    }
+
+    return true;
 }
 
 void

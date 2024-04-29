@@ -46,6 +46,8 @@ class ImageView : public QWidget
 {
     Q_OBJECT
 public:
+    using MsgCallBack = std::function<bool(const std::string& msg)>;
+
     ImageView(std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
               std::unique_ptr<scene_rdl2::rdl2::SceneContext> sceneCtx,
               bool overlay=false,
@@ -81,8 +83,8 @@ public:
 
     //------------------------------
 
-    void sendCommand(const std::string &cmd); // for debug console
-    void sendCommand(std::function<const arras4::api::MessageContentConstPtr()> callBack); // for debug console
+    bool sendCommand(const std::string &cmd, const MsgCallBack& msgCallBack); // for debug console
+
     void changeImageSize(int width, int height); // for debug console
     void changeROI(int xMin, int yMin, int xMax, int yMax); // for debug console
     void changeROIoff(); // for debug console

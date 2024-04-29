@@ -97,9 +97,14 @@ debugConsoleSetup(int port,
 
     // test command
     parser.opt("sendWholeScene", "", "send entire scene w/ forceReload flag",
-               [&](Arg &) -> bool {
-                   imageView.load()->sendCommand("sendWholeScene");
-                   return true;
+               [&](Arg& arg) -> bool {
+                   return imageView.load()->
+                       sendCommand("sendWholeScene", [&](const std::string& msg) { return arg.msg(msg); });
+               });
+    parser.opt("sendEmptyScene", "", "send empty scene",
+               [&](Arg& arg)  {
+                   return imageView.load()->
+                       sendCommand("sendEmptyScene", [&](const std::string& msg) { return arg.msg(msg); });
                });
 
     //------------------------------
