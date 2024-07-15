@@ -1,4 +1,4 @@
-{ 
+{
     "name": "mcrt_progressive",
     "computations": {
         "(client)": {
@@ -8,7 +8,7 @@
         },
         "mcrt": {
             "entry": "yes",
-            "dso": "libcomputation_progmcrt.so",
+            "dso": "@COMPUTATION_PROGMCRT_LIB@",
             "fps": 1,
 	    "machineId": 0,
             "requirements": {
