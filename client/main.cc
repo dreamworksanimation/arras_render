@@ -94,6 +94,8 @@ NotifiedValue<float> progressPercent(0.0);
 std::atomic<bool> benchmarkMode(false);
 std::atomic<bool> showStats(false); // show ClientReceiverFb's statistical info
 
+bool clientReceiverHeadlessMode = false;
+
 void
 setTelemetryClientMessage(const std::string& msg)
 {
@@ -585,7 +587,8 @@ messageHandler(std::shared_ptr<arras4::sdk::SDK> pSdk,
                                                 [&]() {} /*no-op callback for started condition */,
                                                 [&](const std::string &comment) { // genericComment callBack func
                                                     std::cerr << ">> main.cc " << comment << '\n';
-                                                });
+                                                },
+                                                clientReceiverHeadlessMode);
             if (pImageView) {
                 pImageView.load()->getFrameMux().unlock();
             }
@@ -600,7 +603,7 @@ messageHandler(std::shared_ptr<arras4::sdk::SDK> pSdk,
             if (pImageView != nullptr) {
                 pImageView.load()->displayFrame();
             } else {
-                std::cerr << ">> main.cc pImageView is nullptr!!!\n";
+                // std::cerr << ">> main.cc pImageView is nullptr!!!\n"; // useful debug message
             }
 
             if (isFinal(*frameMsg) && !exrFileName.empty()) {
@@ -920,6 +923,7 @@ main(int argc, char* argv[])
 
     delayedRender = cmdOpts["delay"].as<bool>();
     bool guiMode = cmdOpts["gui"].as<bool>() && !cmdOpts["no-gui"].as<bool>();
+    clientReceiverHeadlessMode = !guiMode;
 
     benchmarkMode = cmdOpts["benchmark"].as<bool>();
     showStats = cmdOpts["showStats"].as<bool>();
@@ -1092,6 +1096,13 @@ main(int argc, char* argv[])
                               cmdOpts,
                               exitStatus)) {
             return exitStatus;
+        }
+
+        if (cmdOpts.count("debug-console")) {
+            int port = cmdOpts["debug-console"].as<int>();
+            if (port > 0) {
+                arras_render::debugConsoleSetup(port, pSdk, pFbReceiver, pImageView);
+            }
         }
 
         // not in gui mode just sleep the main thread until we are done

@@ -32,10 +32,10 @@ variants = [
     ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2021.0', 'gcc-9.3.x.1'],
     ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2022.0', 'gcc-9.3.x.1'],
     ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2022.0', 'gcc-9.3.x.1'],
-    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2023.0', 'gcc-11.x'],
-    ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2023.0', 'gcc-11.x'],
-    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2023.0', 'clang-17.0.6.x'],
-    ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2023.0', 'clang-17.0.6.x'],
+    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2023.1', 'gcc-11.x'],
+    ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2023.1', 'gcc-11.x'],
+    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2023.1', 'clang-17.0.6.x'],
+    ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2023.1', 'clang-17.0.6.x'],
 ]
 
 requires = [
@@ -43,10 +43,10 @@ requires = [
     "arras4_core-4.10",
 
     # MCRT
-    "mcrt_dataio-14.8",
-    'moonbase_proxies-13.10',
-    "mcrt_messages-13.2",
-    "scene_rdl2-14.8",
+    "mcrt_dataio-14.17",
+    'moonbase_proxies-13.29',
+    "mcrt_messages-13.4",
+    "scene_rdl2-14.17",
         
     # Third party deps
     "boost",

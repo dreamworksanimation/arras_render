@@ -419,11 +419,11 @@ ImageView::populateRGBFrame()
     if (mBlankDisplay) {
 #ifdef DEBUG_MSG_POPULATE_RGB_FRAME
         std::cerr << ">> ImageView.cc populateRGBFrame() before memset()\n";
-#endif DEBUG_MSG_POPULATE_RGB_FRAME
+#endif // end DEBUG_MSG_POPULATE_RGB_FRAME
         std::memset(&mRgbFrame[0], 0, mRgbFrame.size());
 #ifdef DEBUG_MSG_POPULATE_RGB_FRAME
         std::cerr << ">> ImageView.cc populateRGBFrame() after memset()\n";
-#endif DEBUG_MSG_POPULATE_RGB_FRAME
+#endif // end DEBUG_MSG_POPULATE_RGB_FRAME
         return;
     }
 
