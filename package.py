@@ -43,10 +43,10 @@ requires = [
     "arras4_core-4.10",
 
     # MCRT
-    "mcrt_dataio-14.17",
-    'moonbase_proxies-13.29',
-    "mcrt_messages-13.4",
-    "scene_rdl2-14.17",
+    "mcrt_dataio-14.22",
+    'moonbase_proxies-13.36',
+    "mcrt_messages-13.6",
+    "scene_rdl2-14.22",
         
     # Third party deps
     "boost",
