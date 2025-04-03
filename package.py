@@ -24,35 +24,30 @@ help = ('For assistance, '
         "please contact the folio's owner at: psw-jose@dreamworks.com")
 
 variants = [
-    ['os-CentOS-7', 'opt_level-optdebug', 'refplat-vfx2021.0', 'gcc-9.3.x.1'],
-    ['os-CentOS-7', 'opt_level-debug',    'refplat-vfx2021.0', 'gcc-9.3.x.1'],
-    ['os-CentOS-7', 'opt_level-optdebug', 'refplat-vfx2022.0', 'gcc-9.3.x.1'],
-    ['os-CentOS-7', 'opt_level-debug',    'refplat-vfx2022.0', 'gcc-9.3.x.1'],
-    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2021.0', 'gcc-9.3.x.1'],
-    ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2021.0', 'gcc-9.3.x.1'],
     ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2022.0', 'gcc-9.3.x.1'],
-    ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2022.0', 'gcc-9.3.x.1'],
     ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2023.1', 'gcc-11.x'],
     ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2023.1', 'gcc-11.x'],
     ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2023.1', 'clang-17.0.6.x'],
-    ['os-rocky-9', 'opt_level-debug',    'refplat-vfx2023.1', 'clang-17.0.6.x'],
+
+    ['os-CentOS-7', 'opt_level-optdebug', 'refplat-vfx2022.0', 'gcc-9.3.x.1'],
+    ['os-CentOS-7', 'opt_level-debug',    'refplat-vfx2022.0', 'gcc-9.3.x.1'],
 ]
 
 requires = [
     # Arras deps
-    "arras4_core-4.10",
+    'arras4_core-4.10',
 
     # MCRT
-    "mcrt_dataio-14.22",
-    'moonbase_proxies-13.36',
-    "mcrt_messages-13.6",
-    "scene_rdl2-14.22",
-        
+    'mcrt_dataio-15.5',
+    'moonbase_proxies-14.8',
+    'mcrt_messages-14.1',
+    'scene_rdl2-15.5',
+
     # Third party deps
-    "boost",
-    "jsoncpp-1.9.5",
-    'openimageio-2.3.20.0.x',
-    "openexr"
+    'boost',
+    'jsoncpp-1.9.5',
+    'openexr',
+    'openimageio-2.3.20.0.x'
 ]
 
 
