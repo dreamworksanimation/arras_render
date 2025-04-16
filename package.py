@@ -11,7 +11,7 @@ def version():
     """
     Increment the build in the version.
     """
-    _version = '6.3.0'
+    _version = '6.4'
 
     from rezbuild import earlybind
     return earlybind.version(this, _version)
@@ -39,10 +39,10 @@ requires = [
     'arras4_core-4.10',
 
     # MCRT
-    'mcrt_dataio-15.5',
-    'moonbase_proxies-14.8',
-    'mcrt_messages-14.1',
-    'scene_rdl2-15.5',
+    'mcrt_dataio-15.6',
+    'moonbase_proxies-14.10',
+    'mcrt_messages-14.2',
+    'scene_rdl2-15.6',
 
     # Third party deps
     'boost',
