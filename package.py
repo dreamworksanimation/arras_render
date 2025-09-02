@@ -11,7 +11,7 @@ def version():
     """
     Increment the build in the version.
     """
-    _version = '6.19'
+    _version = '6.20'
 
     from rezbuild import earlybind
     return earlybind.version(this, _version)
@@ -40,7 +40,7 @@ requires = [
 
     # MCRT
     'mcrt_dataio-15.12',
-    'moonbase_proxies-14.25',
+    'moonbase_proxies-14.26',
     'mcrt_messages-14.3',
     'scene_rdl2-15.11',
 
