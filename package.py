@@ -1,4 +1,4 @@
-# Copyright 2023-2024 DreamWorks Animation LLC
+# Copyright 2023-2025 DreamWorks Animation LLC
 # SPDX-License-Identifier: Apache-2.0
 
 # -*- coding: utf-8 -*-
@@ -24,11 +24,42 @@ help = ('For assistance, '
         "please contact the folio's owner at: psw-jose@dreamworks.com")
 
 variants = [
-    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2023.1', 'openimageio-2.4.8.0.x',  'gcc-11.x'],
-    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2023.1', 'openimageio-2.4.8.0.x',  'clang-17.0.6.x'],
-    # ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2024.0', 'openimageio-2.4.8.0.x',  'gcc-11.x'], # This won't build until we upgrade to Qt6
-    # ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2025.0', 'openimageio-3.0',        'gcc-11.x'], # This won't build until we upgrade to Qt6
-    ['os-rocky-9', 'opt_level-optdebug', 'refplat-vfx2022.0', 'openimageio-2.3.20.0.x', 'gcc-9.3.x.1'],
+    [   # variant 0
+        'os-rocky-9',
+        'opt_level-optdebug',
+        'refplat-vfx2023.1',
+        'openimageio-2.4.8.0.x',
+        'gcc-11.x'
+    ],
+    [   # variant 1
+        'os-rocky-9',
+        'opt_level-optdebug',
+        'refplat-vfx2023.1',
+        'openimageio-2.4.8.0.x',
+        'clang-17.0.6.x'
+    ],
+    # Requires that we move to Qt6
+    # [
+    #     'os-rocky-9',
+    #     'opt_level-optdebug',
+    #     'refplat-vfx2024.0',
+    #     'openimageio-2.4.8.0.x',
+    #     'gcc-11.x'
+    # ],
+    # [
+    #     'os-rocky-9',
+    #     'opt_level-optdebug',
+    #     'refplat-vfx2025.0',
+    #     'openimageio-3.0',
+    #     'gcc-11.x'
+    # ],
+    [   # variant 2
+        'os-rocky-9',
+        'opt_level-optdebug',
+        'refplat-vfx2022.0',
+        'openimageio-2.3.20.0.x',
+        'gcc-9.3.x.1'
+    ],
 ]
 
 requires = [
@@ -46,7 +77,6 @@ requires = [
     'jsoncpp-1.9.5',
     'openexr',
 ]
-
 
 private_build_requires = [
     'cmake_modules-1.0',
