@@ -53,6 +53,13 @@ variants = [
     #     'openimageio-3.0',
     #     'gcc-11.x'
     # ],
+    # [
+    #     'os-rocky-9',
+    #     'opt_level-optdebug',
+    #     'refplat-houdini21.0',
+    #     'openimageio-3.0',
+    #     'gcc-11.x'
+    # ],
     [   # variant 2
         'os-rocky-9',
         'opt_level-optdebug',
