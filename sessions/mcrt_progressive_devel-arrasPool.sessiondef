@@ -1,0 +1,108 @@
+{
+    "name": "mcrt_progressive_May2025",
+    "computations": {
+        "(client)": {
+            "messages": {
+                "merge": "*"
+            }
+        }, 
+
+        "dispatch": {
+            "entry": "yes",
+            "dso": "libcomputation_progmcrt_dispatch.so", 
+            "continuous": "false", 
+            "fps": 1,  
+            "numMachines": "$arrayNumber.mcrt",
+            "requirements": { 
+                "hostname_pin":"ic0033.gld.dreamworks.net",
+                "computationAPI": "4.x",
+                "context":"arras_moonray"
+            },
+            "messages": {
+                "(client)": {
+                    "accept": [
+                        "RDLMessage", 
+                        "GenericMessage", 
+                        "RenderedFrame", 
+                        "ViewportMessage", 
+                        "JSONMessage", 
+                        "RenderSetupMessage"
+                    ]
+                },
+                "merge": { "accept": ["GenericMessage"] }
+            }
+        },
+ 
+        "mcrt": {
+            "arrayExpand": 6,
+            "dso": "libcomputation_progmcrt.so", 
+            "fps": 1, 
+            "machineId": "$arrayIndex", 
+            "numMachines": "$arrayNumber", 
+            "packTilePrecision": "auto16",
+            "enableDepthBuffer": true,
+	    "exec_mode": "vector",
+            "auto_affinity": "off",
+            "cpu_affinity": "1-111",
+            "mem_affinity": "on",
+            "requirements": {
+                "computationAPI": "4.x",
+                "context":"arras_moonray",
+                "resources": {
+                    "maxCores": "*",
+                    "minCores": 110,
+                    "memoryMB": 16384
+                }
+            },
+            "messages": {
+                "(client)": {
+                    "accept": [
+                        "GenericMessage", 
+                        "ViewportMessage" 
+                    ]
+                },
+                "dispatch": "*",
+                "merge": {
+                    "accept": [
+                        "GenericMessage",
+                        "CreditUpdate"
+                    ]
+                }
+            }
+        },
+
+        "merge": {
+            "dso": "libcomputation_progmcrt_merge.so", 
+            "fps": 1, 
+            "numMachines": "$arrayNumber.mcrt", 
+            "packTilePrecision": "auto16",
+            "requirements": {  
+                "hostname_pin":"ic0033.gld.dreamworks.net",
+                "computationAPI": "4.x",
+                "context":"arras_moonray",
+                "resources": {
+                    "maxCores": 110,
+                    "minCores": 100
+                }
+            },  
+            "messages": {
+                "(client)": {
+                    "accept": [
+                        "GenericMessage",
+                        "ViewportMessage",
+                        "CreditUpdate"
+                    ]
+                }, 
+                "mcrt": {
+                    "accept": [
+                        "PartialFrame",
+                        "ProgressiveFrame",
+                        "GenericMessage",
+                        "JSONMessage"
+                    ]
+                },
+                "dispatch": "GenericMessage"
+            }
+        }
+    }
+}
