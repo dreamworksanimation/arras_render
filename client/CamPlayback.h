@@ -1,6 +1,5 @@
-// Copyright 2023-2024 DreamWorks Animation LLC
+// Copyright 2023-2025 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #pragma once
 
 #include <scene_rdl2/common/grid_util/Parser.h>
@@ -28,19 +27,20 @@ class CamPlaybackEvent
 public:
     using Mat4f = scene_rdl2::math::Mat4f;
     using SendCamCallBack = std::function<void(const Mat4f& camMtx)>;
+    using SendForceRenderStartCallBack = std::function<void()>;
 
-    CamPlaybackEvent()
-        : mEventId(0)
-        , mIntervalSec(0.0f)
-    {}
-    CamPlaybackEvent(const size_t id, const float intervalSec, const Mat4f& camMtx)
-        : mEventId(id)
-        , mIntervalSec(intervalSec)
-        , mCamMtx(camMtx)
+    CamPlaybackEvent() {}
+    CamPlaybackEvent(const size_t id, const float intervalSec, const Mat4f& camMtx, const bool forceRenderStart)
+        : mEventId {id}
+        , mIntervalSec {intervalSec}
+        , mCamMtx {camMtx}
+        , mForceRenderStart {forceRenderStart}
     {}
 
     void setIntervalSec(const float sec) { mIntervalSec = sec; }
     float getIntervalSec() const { return mIntervalSec; }
+
+    void setForceRenderStart(const bool st) { mForceRenderStart = st; }
 
     void replace(const float intervalSec, const Mat4f& camMtx)
     {
@@ -49,6 +49,7 @@ public:
     }
 
     void playback(const SendCamCallBack& sendCamCallBack,
+                  const SendForceRenderStartCallBack& sendForceRenderStartCallBack,
                   const bool skipInterlva,
                   const float intervalScale) const;
 
@@ -58,9 +59,13 @@ public:
     std::string show() const;
 
 protected:
-    size_t mEventId;
-    float mIntervalSec;
+    size_t mEventId {0};
+    float mIntervalSec {0.0f};
     scene_rdl2::math::Mat4f mCamMtx;
+
+    // mForceRenderStart is an option that ensures at least one frame will always be rendered, even if
+    // multiple CamPlaybackEvent messages are queued up consecutively in the message queue.
+    bool mForceRenderStart {false};
 };
 
 class CamPlayback
@@ -74,6 +79,7 @@ class CamPlayback
 public:
     using Mat4f = scene_rdl2::math::Mat4f;
     using SendCamCallBack = CamPlaybackEvent::SendCamCallBack;
+    using SendForceRenderStartCallBack = CamPlaybackEvent::SendForceRenderStartCallBack;
     using Parser = scene_rdl2::grid_util::Parser;
     using Arg = scene_rdl2::grid_util::Arg;
 
@@ -90,6 +96,7 @@ public:
     ~CamPlayback();
     
     void setSendCamCallBack(const SendCamCallBack& sendCamCallBack);
+    void setSendForceRenderStartCallBack(const SendForceRenderStartCallBack& sendForceRenderStartCallBack);
 
     Mode getMode() const { return mMode; }
 
@@ -98,12 +105,15 @@ public:
     void recInterval(const float sec) { mRecInterval = sec; }
     void recStart() { mTime.start(); mMode = Mode::MODE_REC; }
     void recCam(const Mat4f& camMtx);
+    void recCamTbl(const std::vector<Mat4f>& camMtxTbl, const float intervalSec, const bool forceRenderStart);
 
     void saveCam(const Mat4f& camMtx); // save camera position for recAdd action
     void recAdd(const float intervalSec);
 
     void playStart() { mPlayCurrEventId = mStartEventId; mMode = Mode::MODE_PLAY; }
     void playContinue() { mMode = Mode::MODE_PLAY; }
+
+    void quickPlayback(); // Playback current all CamPlaybackEvent
 
     void slideShow(const float intervalSec);
 
@@ -125,7 +135,7 @@ public:
 protected:
 
     bool isMakeNewEvent(const float interval) const;
-    void addLast(const float intervalSec, const Mat4f& camMtx);
+    void addLast(const float intervalSec, const Mat4f& camMtx, const bool forceStartRender);
     void replaceLast(const float intervalSec, const Mat4f& camMtx);
     void setEventRange(const size_t start, const size_t end);
     void resetEventRange();
@@ -153,10 +163,11 @@ protected:
     float mRecInterval; // sec
     std::vector<CamPlaybackEvent> mEvent;
     SendCamCallBack mSendCamCallBack;
+    SendForceRenderStartCallBack mSendForceRenderStartCallBack;
 
     Mat4f mCurrCamMtx;
 
-    bool mLoopPlayback;
+    bool mLoopPlayback {false};
     bool mReversePlayback;
     size_t mPlayCurrEventId;
     size_t mStartEventId;

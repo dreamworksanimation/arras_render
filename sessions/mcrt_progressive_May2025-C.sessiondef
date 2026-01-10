@@ -1,0 +1,45 @@
+{
+    "name": "mcrt_progressive_May2025-C",
+    "computations": {
+        "(client)": {
+            "messages": {
+                "mcrt": "*"
+            }
+        }, 
+
+        "mcrt": {
+            "entry": "yes",
+            "dso": "libcomputation_progmcrt.so", 
+            "fps": 1, 
+            "machineId": "0", 
+            "numMachines": "1", 
+            "packTilePrecision": "auto16",
+            "enableDepthBuffer": true,
+	    "exec_mode": "vector",
+	    "auto_affinity": "off",
+            "cpu_affinity": "1-111",
+            "mem_affinity": "on",
+            "requirements": {
+                "computationAPI": "4.x",
+                "context":"arras_moonray",
+                "resources": {
+                    "maxCores": "*",
+                    "minCores": 96,
+                    "memoryMB": 16384
+                }
+            },
+            "messages": {
+                "(client)": {
+                    "accept": [
+                        "RDLMessage", 
+                        "GenericMessage", 
+                        "RenderedFrame", 
+                        "ViewportMessage",
+                        "JSONMessage", 
+                        "RenderSetupMessage"
+                    ]
+                }
+            }
+        }
+    }
+}

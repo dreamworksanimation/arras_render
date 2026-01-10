@@ -1,4 +1,4 @@
-// Copyright 2023-2024 DreamWorks Animation LLC
+// Copyright 2023-2025 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
 
 #include "CamPlayback.h"
@@ -17,19 +17,27 @@ namespace arras_render {
 
 void
 CamPlaybackEvent::playback(const SendCamCallBack& sendCamCallBack,
+                           const SendForceRenderStartCallBack& sendForceRenderStartCallBack,
                            const bool skipInterval,
                            const float intervalScale) const
 {
     std::ostringstream ostr;
     ostr << ">> CamPlayback.cc CamPlaybackEvent::playback() : eventId:" << mEventId;
     if (!skipInterval) {
-        ostr << " interval:" << scene_rdl2::str_util::secStr(mIntervalSec);
-        usleep(static_cast<unsigned int>(mIntervalSec * intervalScale * 1000000.0f));
+        if (mIntervalSec > 0.0f) {
+            ostr << " interval:" << scene_rdl2::str_util::secStr(mIntervalSec);
+            usleep(static_cast<unsigned int>(mIntervalSec * intervalScale * 1000000.0f));
+        } else {
+            ostr << " interval:ZERO";
+        }
     }
     std::cerr << ostr.str() << '\n';
 
     if (sendCamCallBack) {
         sendCamCallBack(mCamMtx);
+    }
+    if (mForceRenderStart) {
+        if (sendForceRenderStartCallBack) sendForceRenderStartCallBack();
     }
 }
 
@@ -39,6 +47,7 @@ CamPlaybackEvent::encode(scene_rdl2::rdl2::ValueContainerEnq& enq) const
     enq.enqVLSizeT(mEventId);
     enq.enq<float>(mIntervalSec);
     enq.enqMat4f(mCamMtx);
+    enq.enqBool(mForceRenderStart);
 }
 
 void
@@ -47,6 +56,7 @@ CamPlaybackEvent::decode(scene_rdl2::rdl2::ValueContainerDeq& deq)
     mEventId = deq.deqVLSizeT();
     mIntervalSec = deq.deq<float>();
     mCamMtx = deq.deqMat4f();
+    mForceRenderStart = deq.deqBool();
 }
 
 std::string
@@ -73,6 +83,7 @@ CamPlaybackEvent::show() const
          << "    " << showVL(mCamMtx[2][0], mCamMtx[2][1], mCamMtx[2][2], mCamMtx[2][3]) << '\n'
          << "    " << showVL(mCamMtx[3][0], mCamMtx[3][1], mCamMtx[3][2], mCamMtx[3][3]) << '\n'
          << "  }\n"
+         << "  mForceRenderStart:" << scene_rdl2::str_util::boolStr(mForceRenderStart) << '\n'
          << "}";
     return ostr.str();
 }
@@ -116,9 +127,29 @@ CamPlayback::~CamPlayback()
 }
 
 void
-CamPlayback::setSendCamCallBack(const SendCamCallBack& sendCamCallBack)
+CamPlayback::setSendCamCallBack(const SendCamCallBack& callBack)
 {
-    mSendCamCallBack = sendCamCallBack;
+    mSendCamCallBack = callBack;
+}
+
+void
+CamPlayback::setSendForceRenderStartCallBack(const SendForceRenderStartCallBack& callBack)
+{
+    mSendForceRenderStartCallBack = callBack;
+}
+
+void
+CamPlayback::quickPlayback()
+{
+    mInitFrameSec = 0.0f;
+    mLastFrameSec = 0.0f;
+    mLoopPlayback = false;
+    mReversePlayback = false;
+
+    mStartEventId = 0;
+    mPlayIntervalScale = 1.0f;
+    
+    playStart();
 }
 
 void
@@ -135,13 +166,23 @@ CamPlayback::clear()
 void
 CamPlayback::recCam(const scene_rdl2::math::Mat4f& camMtx)
 {
-    float currInterval = mTime.end();
+    const float currInterval = mTime.end();
     if (isMakeNewEvent(currInterval)) {
-        addLast(currInterval, camMtx);
+        addLast(currInterval, camMtx, false);
     } else {
         replaceLast(currInterval, camMtx);
     }
     mTime.start();
+}
+
+void
+CamPlayback::recCamTbl(const std::vector<Mat4f>& camMtxTbl,
+                       const float intervalSec,
+                       const bool forceRenderStart)
+{
+    for (const Mat4f& camMtx : camMtxTbl) {
+        addLast(intervalSec, camMtx, forceRenderStart);
+    }
 }
 
 void
@@ -153,7 +194,7 @@ CamPlayback::saveCam(const Mat4f& camMtx)
 void
 CamPlayback::recAdd(const float intervalSec)
 {
-    addLast(intervalSec, mCurrCamMtx);
+    addLast(intervalSec, mCurrCamMtx, false);
 }
     
 void
@@ -172,13 +213,22 @@ CamPlayback::jumpTo(const size_t eventId)
 
     const CamPlaybackEvent& currEvent = mEvent[mPlayCurrEventId];
     if (mMode == Mode::MODE_PLAY) {
-        currEvent.playback(mSendCamCallBack, false, mPlayIntervalScale);
+        currEvent.playback(mSendCamCallBack,
+                           mSendForceRenderStartCallBack,
+                           false,
+                           mPlayIntervalScale);
     } else if (mMode == Mode::MODE_SLIDESHOW) {
-        currEvent.playback(mSendCamCallBack, true, 0.0f);
+        currEvent.playback(mSendCamCallBack,
+                           mSendForceRenderStartCallBack,
+                           true,
+                           0.0f);
         usleep(static_cast<unsigned int>(mSlideShowFrameSec * 1000000.0f));        
         std::cerr << "SlideShow : interval:" << scene_rdl2::str_util::secStr(mSlideShowFrameSec) << '\n';
     } else {
-        currEvent.playback(mSendCamCallBack, true, 0.0f);
+        currEvent.playback(mSendCamCallBack,
+                           mSendForceRenderStartCallBack,
+                           true,
+                           0.0f);
     }
 }
 
@@ -230,7 +280,7 @@ CamPlayback::load(const std::string& filename, std::string& error)
             return 0;
         };
 
-        size_t fileSize = getFileSize(filename);
+        const size_t fileSize = getFileSize(filename);
         if (!fileSize) {
             std::ostringstream ostr;
             ostr << "Could not get fileSize. filename:" << filename;
@@ -263,7 +313,7 @@ CamPlayback::load(const std::string& filename, std::string& error)
     mMode = Mode::MODE_STOP;
 
     mRecInterval = deq.deq<float>();
-    size_t size = deq.deqVLSizeT();
+    const size_t size = deq.deqVLSizeT();
     mEvent.resize(size);
     for (size_t i = 0; i < size; ++i) {
         mEvent[i].decode(deq);
@@ -353,10 +403,10 @@ CamPlayback::isMakeNewEvent(const float interval) const
 }
 
 void
-CamPlayback::addLast(const float intervalSec, const Mat4f& camMtx)
+CamPlayback::addLast(const float intervalSec, const Mat4f& camMtx, const bool forceStartRender)
 {
-    size_t id = mEvent.size();
-    mEvent.emplace_back(id, intervalSec, camMtx);
+    const size_t id = mEvent.size();
+    mEvent.emplace_back(id, intervalSec, camMtx, forceStartRender);
     mEndEventId = mEvent.size() - 1;
 }
 
@@ -403,8 +453,8 @@ CamPlayback::processCurrPlaybackEvent()
 
     jumpTo(mPlayCurrEventId);
 
-    if (mPlayCurrEventId == startId()) waitSec(mInitFrameSec);
-    if (mPlayCurrEventId == endId()) waitSec(mLastFrameSec);
+    if (mPlayCurrEventId == startId() && mInitFrameSec > 0.0f) waitSec(mInitFrameSec);
+    if (mPlayCurrEventId == endId() && mLastFrameSec > 0.0f) waitSec(mLastFrameSec);
 
     if (mPlayCurrEventId == endId()) {
         std::cerr << "====>>>>> CamPlayback : last eventId:" << mPlayCurrEventId << " <<<<<====\n";
@@ -474,7 +524,7 @@ CamPlayback::parserConfigure()
                 [&](Arg& arg) -> bool { recStart(); return arg.msg("REC\n"); });
     mParser.opt("recAdd", "<interval-sec>", "add current cam matrix to the end",
                 [&](Arg& arg) -> bool {
-                    float intervalSec = (arg++).as<float>(0);
+                    const float intervalSec = (arg++).as<float>(0);
                     recAdd(intervalSec);
                     return arg.fmtMsg("REC-ADD eventId:%d interval:%s\n",
                                       mEvent.size() - 1,
@@ -520,7 +570,7 @@ CamPlayback::parserConfigure()
                 [&](Arg& arg) -> bool { playContinue(); return arg.msg("CONTINUE\n"); });
     mParser.opt("slideShow", "<interval-sec>", "playback like slideshow",
                 [&](Arg& arg) -> bool {
-                    float intervalSec = (arg++).as<float>(0);
+                    const float intervalSec = (arg++).as<float>(0);
                     slideShow(intervalSec);
                     return arg.fmtMsg("SLIDE-SHOW interval:%s\n", str_util::secStr(intervalSec).c_str());
                 });
@@ -537,13 +587,13 @@ CamPlayback::parserConfigure()
     mParser.opt("save", "<filename>", "save cam playback data",
                 [&](Arg& arg) -> bool {
                     std::string error;
-                    bool flag = save((arg++)(), error);
+                    const bool flag = save((arg++)(), error);
                     return arg.msg(std::string("save ") + (flag ? "OK" : "NG ") + error + '\n');
                 });
     mParser.opt("load", "<filename>", "load cam playback data",
                 [&](Arg& arg) -> bool {
                     std::string error;
-                    bool flag = load((arg++)(), error);
+                    const bool flag = load((arg++)(), error);
                     return arg.msg(std::string("load ") + (flag ? "OK" : "NG ") + error + '\n');
                 });
 }

@@ -1,4 +1,4 @@
-// Copyright 2023-2024 DreamWorks Animation LLC
+// Copyright 2023-2025 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
 
 #include "DebugConsoleSetup.h"
@@ -10,7 +10,7 @@
 namespace arras_render {
 
 void
-debugConsoleSetup(int port,
+debugConsoleSetup(const int port,
                   std::shared_ptr<arras4::sdk::SDK> &sdk,
                   std::shared_ptr<mcrt_dataio::ClientReceiverFb> &fbReceiver,
                   std::atomic<ImageView *> &imageView)
@@ -43,8 +43,10 @@ debugConsoleSetup(int port,
 
     mcrt_dataio::ClientReceiverConsoleDriver &console = fbReceiver->consoleDriver();
     scene_rdl2::grid_util::Parser& parser = console.getRootParser();
-    parser.opt("imageView", "...command...", "imageView command",
+    parser.opt("imageViewOld", "...command...", "imageView command old commands",
                [&](Arg &arg) -> bool { return sParserImageView.main(arg.childArg()); });
+    parser.opt("imageView", "...command...", "imageView command",
+               [&](Arg& arg) { return imageView.load()->getParser().main(arg.childArg()); });
     sParserImageView.opt("roi", "...command...", "ROI command",
                          [&](Arg &arg) -> bool { return sParserRoi.main(arg.childArg()); });
     sParserImageView.opt("viewport", "...command...", "viewport command",
@@ -52,15 +54,15 @@ debugConsoleSetup(int port,
     sParserImageView.opt("camPlayback", "...command...", "camera playback command",
                          [&](Arg& arg) -> bool {
                              if (!imageView.load()) {
-                                 return arg.msg("mImageView is null, no cam playback information yet\n");                                  
+                                 return arg.msg("mImageView is null, no cam playback information yet\n");
                              }
                              return imageView.load()->getCamPlayback().getParser().main(arg.childArg());
                          });
     sParserImageView.opt("overlay", "<offX> <offY> <fontSize>", "set overlay offset and size",
                          [&](Arg& arg) -> bool {
-                             unsigned offX = arg.as<unsigned>(0);
-                             unsigned offY = arg.as<unsigned>(1);
-                             unsigned fontSize = arg.as<unsigned>(2);
+                             const unsigned offX = arg.as<unsigned>(0);
+                             const unsigned offY = arg.as<unsigned>(1);
+                             const unsigned fontSize = arg.as<unsigned>(2);
                              arg += 3;
                              if (!imageView.load()) {
                                  return arg.msg("mImageView is null, no cam playback information yet\n");
@@ -71,12 +73,15 @@ debugConsoleSetup(int port,
     sParserImageView.opt("showImgPos", "", "show image display screen pixel position",
                          [&](Arg& arg) -> bool {
                              if (!imageView.load()) {
-                                 return arg.msg("mImageView is null, no cam playback information yet\n");                                  
+                                 return arg.msg("mImageView is null, no cam playback information yet\n");
                              }
                              int x, y;
                              imageView.load()->getImageDisplayWidgetPos(x, y);
                              std::ostringstream ostr;
-                             ostr << ":0.0+" << x << "," << y;
+                             // Just reference it as a heuristic solution. Somehow image position is Y =-16.
+                             // We need a more robust way to display the image screen pixel position.
+                             ostr << ":0.0+" << x << "," << y << "   (orig)\n"
+                                  << ":0.0+" << x << "," << y - 16 << "   (Y=-16)\n";
                              return arg.msg(ostr.str() + '\n');
                          });
 
@@ -112,10 +117,10 @@ debugConsoleSetup(int port,
     sParserRoi.description("ROI command");
     sParserRoi.opt("on", "<xMin> <yMin> <xMax> <yMax>", "enable ROI window",
                    [&](Arg &arg) -> bool {
-                       int xMin = arg.as<int>(0);
-                       int yMin = arg.as<int>(1);
-                       int xMax = arg.as<int>(2);
-                       int yMax = arg.as<int>(3);
+                       const int xMin = arg.as<int>(0);
+                       const int yMin = arg.as<int>(1);
+                       const int xMax = arg.as<int>(2);
+                       const int yMax = arg.as<int>(3);
                        arg += 4;
                        imageView.load()->changeROI(xMin, yMin, xMax, yMax);
                        return console.sendMessage([&]() -> const arras4::api::MessageContentConstPtr {
@@ -158,8 +163,8 @@ debugConsoleSetup(int port,
     sParserViewport.description("viewport command");
     sParserViewport.opt("set", "<w> <h>", "change iage width and height",
                         [&](Arg &arg) -> bool {
-                            int width = arg.as<int>(0);
-                            int height = arg.as<int>(1);
+                            const int width = arg.as<int>(0);
+                            const int height = arg.as<int>(1);
                             arg += 2;
                             imageView.load()->changeImageSize(width, height);
                             return console.sendMessage([&]() -> const arras4::api::MessageContentConstPtr {

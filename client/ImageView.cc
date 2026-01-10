@@ -1,7 +1,7 @@
-// Copyright 2023-2024 DreamWorks Animation LLC
+// Copyright 2023-2025 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #include "ImageView.h"
+#include "NavigationCam.h"
 
 #ifdef __ARM_NEON__
 // This works around OIIO including x86 based headers due to detection of SSE
@@ -18,6 +18,7 @@
 #include <fstream>
 #include <iostream>
 #include <list>
+#include <sstream>
 #include <vector>
 
 #include <boost/format.hpp>
@@ -39,6 +40,8 @@
 #include <scene_rdl2/scene/rdl2/BinaryReader.h>
 #include <scene_rdl2/scene/rdl2/SceneObject.h>
 #include <scene_rdl2/scene/rdl2/Types.h>
+#include <mcrt_dataio/client/receiver/ClientReceiverConsoleDriver.h>
+#include <mcrt_dataio/engine/mcrt/McrtControl.h>
 
 #include <mcrt_messages/RDLMessage.h>
 #include <mcrt_messages/RenderMessages.h>
@@ -48,6 +51,7 @@
 
 #include "encodingUtil.h"
 #include "outputRate.h"
+#include "TelemetryPanelUtil.h"
 
 //#define DEBUG_MSG_DISPLAY_FRAME
 //#define DEBUG_MSG_POPULATE_RGB_FRAME
@@ -67,8 +71,6 @@ const std::string COLOR_ICON = "/usr/share/icons/crystal_project/22x22/apps/colo
 const std::string WINDOW_ICON = ":/window-icon.png";
 
 } // anon namespace
-
-using namespace arras_render;
 
 ImageView::ImageView(std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
                      std::unique_ptr<scene_rdl2::rdl2::SceneContext> sceneCtx,
@@ -160,8 +162,8 @@ ImageView::ImageView(std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
         mImgScale = static_cast<unsigned int>(ceil(static_cast<float>(mImgHeight)/TARGET_HEIGHT));
     }
 
-    unsigned int width = mImgWidth / mImgScale;
-    unsigned int height = mImgHeight / mImgScale;
+    const unsigned int width = mImgWidth / mImgScale;
+    const unsigned int height = mImgHeight / mImgScale;
     mImage->setFixedSize(width, height);
 
     // Update telemetry overlay resolution for zoom action.
@@ -232,6 +234,10 @@ ImageView::ImageView(std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
     initCam();
     initImage();
 
+    mFbReceiver->setTelemetryPanelPathVisClientInfoCallBack([&]() -> std::string {
+        return pathVisClientInfoCallBack();
+    });
+
     // connections need to be queued for for things which will be done from scripts since the
     // script runs in another thread a QueuedConnection makes this thread safe
     connect(this, SIGNAL(displayFrameSignal()),
@@ -290,6 +296,8 @@ ImageView::ImageView(std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
     } else {
         mButRunScript->setDisabled(true);
     }
+
+    parserConfigure();
 }
 
 void
@@ -413,6 +421,480 @@ ImageView::clearDisplayFrame()
     setInitialCondition(); // This makes the rgbFrame condition as very beginning of the process.
 }
 
+arras_render::NavigationCam*
+ImageView::getNavigationCam()
+{
+    return ((mActiveCameraType == arras_render::CameraType::ORBIT_CAM) ?
+            static_cast<arras_render::NavigationCam*>(&mOrbitCam) :
+            static_cast<arras_render::NavigationCam*>(&mFreeCam));
+}
+
+bool
+ImageView::processKeyboardEvent(const arras_render::KeyEvent* event)
+{
+    auto setDenoiseCondition = [&](const bool flag) {
+        if (flag) {
+            getFbReceiver()->setBeautyDenoiseMode(mcrt_dataio::ClientReceiverFb::DenoiseMode::ENABLE);
+        } else {
+            getFbReceiver()->setBeautyDenoiseMode(mcrt_dataio::ClientReceiverFb::DenoiseMode::DISABLE);
+        }
+    };
+
+    bool used = false;
+
+    if (event->getPress() == arras_render::KeyAction_Press) {
+        if (event->getModifiers() == arras_render::QT_NoModifier) {
+            used = true;
+            switch (event->getKey()) {
+            //
+            // camera toggle
+            //
+            case arras_render::Key_O : // camera type toggle
+                if (mActiveCameraType == arras_render::CameraType::ORBIT_CAM) {
+                    // switch from orbit cam to free cam 
+                    const auto xform = mOrbitCam.update(0.0f);
+                    mOrbitCam.clearMovementState();
+                    mFreeCam.resetTransform(xform, false);
+                    mActiveCameraType = arras_render::CameraType::FREE_CAM;
+                    std::cout << "===>>> Using FreeCam mode <<<===" << std::endl;
+                } else {
+                    // switch from free cam to orbit cam
+                    const auto xform = mFreeCam.update(0.0f);
+                    mFreeCam.clearMovementState();
+                    mOrbitCam.resetTransform(xform, false);
+                    mActiveCameraType = arras_render::CameraType::ORBIT_CAM;
+                    std::cout << "===>>> Using OrbitCam mode <<<===" << std::endl;
+                }
+                break;
+
+            //
+            // Telemetry Control
+            //
+            case arras_render::Key_H : // telemetry overlay condition toggle
+                mTelemetryOverlay = !mTelemetryOverlay;
+                mFbReceiver->setTelemetryOverlayActive(mTelemetryOverlay);
+                break;
+            case arras_render::Key_SQUAREBRACKET_OPEN : // telemetry panel to parent
+                if (mFbReceiver->getTelemetryOverlayActive()) mFbReceiver->switchTelemetryPanelToParent();
+                break;
+            case arras_render::Key_G : // telemetry panel to next
+            case arras_render::Key_APOSTROPHE :  // telemetry panel to next
+                if (mFbReceiver->getTelemetryOverlayActive()) mFbReceiver->switchTelemetryPanelToNext();
+                break;
+            case arras_render::Key_SEMICOLON : // telemetry panel to prev
+                if (mFbReceiver->getTelemetryOverlayActive()) mFbReceiver->switchTelemetryPanelToPrev();
+                break;
+            case arras_render::Key_SLASH : // telemetry panel to child
+                if (mFbReceiver->getTelemetryOverlayActive()) mFbReceiver->switchTelemetryPanelToChild();
+                break;
+
+            //
+            // Denoise Control
+            //
+            case arras_render::Key_N : // denoise condition toggle
+                mDenoise = !mDenoise;
+                setDenoiseCondition(mDenoise);
+                break;
+
+            default : used = false; break;
+            }
+        } else if (event->getModifiers() == arras_render::QT_SHIFT) {
+            used = true;
+            switch (event->getKey()) {
+            case arras_render::Key_G : // telemetry panel to prev
+                if (mFbReceiver->getTelemetryOverlayActive()) mFbReceiver->switchTelemetryPanelToPrev();
+                break;
+            default : used = false; break;
+            }
+        }
+    }
+
+    return used;
+}
+
+bool
+ImageView::telemetryPanelKeyboardEvent(const arras_render::KeyEvent* event, bool& activeKey)
+{
+    std::string telemetryPanelName = mFbReceiver->getCurrentTelemetryPanelName();
+    if (telemetryPanelName == "pathVis") {
+        return telemetryPanelPathVisKeyboardEvent(event, activeKey);
+    }
+    activeKey = false;
+    return false;
+}
+
+bool
+ImageView::telemetryPanelPathVisKeyboardEvent(const arras_render::KeyEvent* event, bool& activeKey)
+{
+    auto evalCmd = [&](const std::string& cmd) {
+        std::string outMsg;
+        if (evalArrasRenderCmd(cmd, outMsg)) std::cerr << outMsg << '\n';
+    };
+    auto startSimCmd = [&]() {
+        evalCmd("mcrt rankAll");
+        evalCmd("mcrt cmd renderContext pathVisMgr pathVis startSim");
+        // mPathVisCamCheckpoint.updatePathVisCamMtx(getNavigationCam()->update(0.0f));
+    };
+
+    auto keyEventPathVisToggle = [&]() {
+        mPathVisEnable = !mPathVisEnable;
+        evalCmd("mcrt rankAll");
+        if (mPathVisEnable) evalCmd("mcrt -cmd -pathVisMode on");
+        else evalCmd("mcrt cmd pathVisMode off");
+    };
+    auto keyEventDeltaPix = [&](const bool x, const int delta) {
+        evalCmd("mcrt rankAll");
+        std::ostringstream ostr;
+        ostr << "mcrt cmd renderContext pathVisMgr param " << (x ? "deltaPixelX " : "deltaPixelY ") << delta;
+        evalCmd(ostr.str());
+        startSimCmd();
+    };
+    auto keyEventSample = [&](const std::string& cmd, const int delta) {
+        evalCmd("mcrt rankAll");
+        std::ostringstream ostr;
+        ostr << "mcrt cmd renderContext pathVisMgr param " << cmd << ' ' << delta;
+        evalCmd(ostr.str());
+        startSimCmd();
+    };
+    auto keyEventToggle = [&](const std::string& cmd) {
+        evalCmd("mcrt rankAll");
+        std::ostringstream ostr;
+        ostr << "mcrt cmd renderContext pathVisMgr param " << cmd;
+        evalCmd(ostr.str());
+        startSimCmd();
+    };
+    auto keyEventActiveCurrLineToggle = [&]() {
+        evalCmd("clientReceiver vecPktMgr activeCurrLineToggle");
+    };
+    auto keyEventDeltaCurrRankId = [&](const int delta) {
+        std::ostringstream ostr;
+        ostr << "clientReceiver vecPktMgr deltaCurrRankId " << delta;
+        evalCmd(ostr.str());
+    };
+    auto keyEventDeltaCurrLineId = [&](const int delta) {
+        if (delta > 0) evalCmd("clientReceiver vecPktMgr currRank nextCurr");
+        else           evalCmd("clientReceiver vecPktMgr currRank prevCurr");
+    };
+    auto keyEventActiveCurrPosToggle = [&]() {
+        evalCmd("clientReceiver vecPktMgr currRank activeCurrPosToggle");
+    };
+    auto keyEventOnlyDrawCurrRank = [&]() {
+        evalCmd("clientReceiver vecPktMgr onlyDrawCurrRankToggle");
+    };
+    auto keyEventCamCheckpointPush = [&]() {
+        const scene_rdl2::math::Mat4f camXform = getNavigationCam()->update(0.0f);
+        mFreeCam.resetTransform(camXform, true);
+        mOrbitCam.resetTransform(camXform, true);
+        mPathVisCamCheckpoint.push(camXform);
+    };
+    auto keyEventCamCheckpoint = [&](const int delta) {
+        scene_rdl2::math::Mat4f camXform = (delta < 0) ? mPathVisCamCheckpoint.getPrev() : mPathVisCamCheckpoint.getNext(); 
+        sendCamUpdateMain(camXform, true);
+        mFreeCam.resetTransform(camXform, true);
+        mOrbitCam.resetTransform(camXform, true);
+    };
+    auto keyEventDeltaMoveStep = [&](const int delta) {
+        float f = static_cast<float>(mPosMoveStep);
+        f = (delta > 0) ? f * 2.0f : f * 0.5f;
+        if (f < 1.0f) mPosMoveStep = 1;
+        else if (f > 512.0f) mPosMoveStep = 512;
+        else mPosMoveStep = static_cast<int>(f);
+    };
+    auto keyEventPathVisSetInitCam = [&]() {
+        evalCmd("mcrt rankAll");
+        evalCmd("mcrt cmd renderContext pathVisMgrSetInitCam");
+        startSimCmd();
+        mPathVisCamCheckpoint.updatePathVisCamMtx(getNavigationCam()->update(0.0f));
+    };
+    auto keyEventPathVisCamMtxToggle = [&]() {
+        scene_rdl2::math::Mat4f camXform = mPathVisCamCheckpoint.swapBetweenCurrAndPathVisCam();
+        sendCamUpdateMain(camXform, true);
+        mFreeCam.resetTransform(camXform, true);
+        mOrbitCam.resetTransform(camXform, true);
+    };
+    auto keyEventDrawLineOnly = [&](const bool press) -> bool {
+        if (event->getAutoRepeat()) return false; // We skip autoRepeat event
+        if (press) {
+            if (mPathVisLastEscKeyPress) {
+                std::cerr << ">> ImageView.cc keyEventDrawLineOnlye press=true FALSE\n";
+                return false;
+            }
+            evalCmd("mcrt rankAll");
+            evalCmd("clientReceiver telemetry stack top curr layout lineDrawOnly on");
+            mPathVisLastEscKeyPress = true;
+        } else {
+            if (!mPathVisLastEscKeyPress) return false;
+            evalCmd("mcrt rankAll");
+            evalCmd("clientReceiver telemetry stack top curr layout lineDrawOnly off");
+            mPathVisLastEscKeyPress = false;
+        }
+        return true;
+    };
+    auto keyEventHotKeyHelpToggle = [&]() -> bool {
+        if (event->getAutoRepeat()) return false; // We skip autoRepeat event
+        if (!mPathVisLastQuestionKeyPress) {
+            mPathVisLastQuestionKeyPress = true;
+            evalCmd("clientReceiver telemetry stack top curr layout hotKeyHelp on");
+        } else {
+            mPathVisLastQuestionKeyPress = false;
+            evalCmd("clientReceiver telemetry stack top curr layout hotKeyHelp off");
+        }
+        return true;
+    };
+        
+    bool used = false;
+    activeKey = false;
+    if (event->getPress() == arras_render::KeyAction_Press) {
+        if (event->getModifiers() == arras_render::QT_NoModifier) {
+            used = true;
+            activeKey = true;
+            switch (event->getKey()) {
+            case arras_render::Key_1 : keyEventPathVisToggle(); break; // pathVis on/off toggle
+            case arras_render::Key_2 : keyEventSample("deltaPixelSamples", 1); break;
+            case arras_render::Key_3 : keyEventSample("deltaLightSamples", 1); break;
+            case arras_render::Key_4 : keyEventSample("deltaBsdfSamples", 1); break;
+            case arras_render::Key_5 : keyEventSample("deltaMaxDepth", 1); break;
+
+            case arras_render::Key_6 : keyEventToggle("toggleUseSceneSamples"); break;
+            case arras_render::Key_7 : keyEventToggle("toggleOcclusionRays"); break;
+            case arras_render::Key_8 : keyEventToggle("toggleSpecularRays"); break;
+            case arras_render::Key_9 : keyEventToggle("toggleDiffuseRays"); break;
+            case arras_render::Key_0 : keyEventToggle("toggleBsdfSamples"); break;
+            case arras_render::Key_MINUS : keyEventToggle("toggleLightSamples"); break;
+
+            case arras_render::Key_EQUAL : keyEventActiveCurrLineToggle(); break;
+            case arras_render::Key_P : keyEventDeltaCurrRankId(1); break;
+            case arras_render::Key_SQUAREBRACKET_CLOSE : keyEventDeltaCurrLineId(1); break;
+            case arras_render::Key_BACKSLASH : keyEventActiveCurrPosToggle(); break;
+            case arras_render::Key_J : orbitCamRecenterToCurrPos(false); break;
+            case arras_render::Key_K : keyEventOnlyDrawCurrRank(); break;
+            case arras_render::Key_M : keyEventCamCheckpointPush(); break;
+            case arras_render::Key_B : keyEventPathVisCamMtxToggle(); break; 
+            case arras_render::Key_V : keyEventCamCheckpoint(1); break;
+                
+            case arras_render::Key_X : keyEventDeltaPix(true, mPosMoveStep); break; // deltaPix X positive
+            case arras_render::Key_Y : keyEventDeltaPix(false, mPosMoveStep); break; // deltaPix Y positive
+            case arras_render::Key_Z : keyEventDeltaMoveStep(1); break;
+
+            case arras_render::Key_ESC : used = keyEventDrawLineOnly(true); break; 
+
+            default :
+                std::cerr << "ImageView.cc not assigned keyEvent " << event->show() << '\n';
+                used = false;
+                activeKey = false;
+                break;
+            }
+
+        } else if (event->getModifiers() == arras_render::QT_SHIFT) {
+            used = true;
+            activeKey = true;
+            switch (event->getKey()) {
+            case 0x40 : keyEventSample("deltaPixelSamples", -1); break;
+            case 0x23 : keyEventSample("deltaLightSamples", -1); break;
+            case 0x24 : keyEventSample("deltaBsdfSamples", -1); break;
+            case 0x25 : keyEventSample("deltaMaxDepth", -1); break;
+
+            case arras_render::Key_P : keyEventDeltaCurrRankId(-1); break;
+            case 0x7d : keyEventDeltaCurrLineId(-1); break;
+
+            case arras_render::Key_J : orbitCamRecenterToCurrPos(true); break;
+            case arras_render::Key_M : keyEventPathVisSetInitCam(); break;
+            case arras_render::Key_V : keyEventCamCheckpoint(-1); break;
+
+            case arras_render::Key_X : keyEventDeltaPix(true, -mPosMoveStep); break; // deltaPix X negative
+            case arras_render::Key_Y : keyEventDeltaPix(false, -mPosMoveStep); break; // deltaPix Y negative
+            case arras_render::Key_Z : keyEventDeltaMoveStep(-1); break;
+
+            case arras_render::Key_QUESTION : used = keyEventHotKeyHelpToggle(); break;
+
+            default :
+                std::cerr << "ImageView.cc not assigned QT_SHIFT + keyEvent " << event->show() << '\n';
+                used = false;
+                activeKey = false;
+                break;
+            }
+        }
+    } else if (event->getPress() == arras_render::KeyAction_Release) {
+        if (event->getModifiers() == arras_render::QT_NoModifier) {
+            used = true;
+            activeKey = true;
+            switch (event->getKey()) {
+            case arras_render::Key_ESC : used = keyEventDrawLineOnly(false); break; 
+            default :
+                used = false;
+                activeKey = false;
+                break;
+            }
+        }
+    }
+    return used;
+}
+
+bool
+ImageView::telemetryPanelMousePressEvent(const arras_render::MouseEvent& event)
+{
+    std::string telemetryPanelName = mFbReceiver->getCurrentTelemetryPanelName();
+    if (telemetryPanelName == "pathVis") {
+        return telemetryPanelPathVisMousePressEvent(event);
+    }
+
+    return false;
+}
+
+bool
+ImageView::telemetryPanelPathVisMousePressEvent(const arras_render::MouseEvent& event)
+{
+    auto calcImagePixPos = [&](const int labelX, const int labelY, int& imgX, int& imgY) {
+        QPoint labelPos(labelX, labelY);
+
+        if (!mImage->pixmap() || mImage->pixmap()->isNull()) return false;
+
+        const qreal dpr = mImage->pixmap()->devicePixelRatio();
+        const QSize pixMapLogicalSize = mImage->pixmap()->size() / dpr;
+        const QRect cr = mImage->contentsRect();
+        const QSize target = mImage->hasScaledContents() ? cr.size() : pixMapLogicalSize.scaled(cr.size(), Qt::KeepAspectRatio);
+        const QRect ar = QStyle::alignedRect(mImage->layoutDirection(), mImage->alignment(), target, cr);
+        if (!ar.contains(labelPos)) return false;
+
+        const QPoint rel = labelPos - ar.topLeft();
+        imgX = static_cast<int>(qRound(double(rel.x()) * pixMapLogicalSize.width() / ar.width()));
+        imgY = mImage->height() - static_cast<int>(qRound(double(rel.y()) * pixMapLogicalSize.height() / ar.height())); // flip Y
+        imgX = std::clamp(static_cast<int>(imgX * mImgScale), 0, static_cast<int>(pixMapLogicalSize.width() * mImgScale - 1));
+        imgY = std::clamp(static_cast<int>(imgY * mImgScale), 0, static_cast<int>(pixMapLogicalSize.height() * mImgScale - 1));
+        return true;
+    };
+    auto pickImagePixPos = [&](int& imgX, int& imgY) -> bool {
+        if (!calcImagePixPos(event.getX(), event.getY(), imgX, imgY)) {
+            return false; // early exit. picked outside image
+        }
+        std::cerr << "===>>> PickPos --- (x:" << event.getX() << " y:" << event.getY() << ") -> "
+                  << "(imgX:" << imgX << " imgY:" << imgY << ") <<<===\n";
+        return true;
+    };
+    auto evalCmd = [&](const std::string& cmd) {
+        std::string outMsg;
+        if (evalArrasRenderCmd(cmd, outMsg)) std::cerr << outMsg << '\n';
+    };
+    auto startSimCmd = [&]() {
+        evalCmd("mcrt rankAll");
+        evalCmd("mcrt cmd renderContext pathVisMgr pathVis startSim");
+    };
+
+    auto mousePressEventPickPos = [&]() -> bool {
+        if (!mPathVisCamCheckpoint.isCurrCamPathVisCam()) return false; // currCam is not pathVisCam
+        int imgX, imgY;
+        if (!pickImagePixPos(imgX, imgY)) return false; // early exit. picked outside image
+        evalCmd("mcrt rankAll");
+        std::ostringstream ostr;
+        ostr << "mcrt cmd renderContext pathVisMgr param pixel " << imgX << ' ' << imgY;
+        evalCmd(ostr.str());
+        startSimCmd();
+
+        return true;
+    };
+    auto mousePressEventPickCurrent = [&]() -> bool {
+        int imgX, imgY;
+        if (!pickImagePixPos(imgX, imgY)) return false; // early exit. picked outside image
+        std::ostringstream ostr;
+        ostr << "clientReceiver vecPktMgr currRank pickCurr " << imgX << ' ' << imgY;
+        std::cerr << ">> ImageView.cc mousePressEventPickCurrent : " << ostr.str() << '\n';
+        evalCmd(ostr.str());
+        return true;
+    };
+
+    // std::cerr << ">> ImageView.cc event:" << event.show() << '\n'; // for debug
+
+    if (mPressShiftKey && !mPressAltKey && !mPressCtrlKey) { // SHIFT
+        if (mousePressEventPickPos()) return true;
+    } else if (!mPressShiftKey && !mPressAltKey && mPressCtrlKey) { // CTRL
+        // std::cerr << ">> ImageView.cc mousePressEvent() CTRL\n"; // for debug
+    } else if (mPressShiftKey && !mPressAltKey && mPressCtrlKey) { // SHIFT + CTRL
+        if (mousePressEventPickCurrent()) return true;
+    }
+    return false;
+}
+
+bool
+ImageView::telemetryPanelMouseReleaseEvent(const arras_render::MouseEvent& event)
+{
+    std::string telemetryPanelName = mFbReceiver->getCurrentTelemetryPanelName();
+    if (telemetryPanelName == "pathVis") {
+        return telemetryPanelPathVisMouseReleaseEvent(event);
+    }
+
+    return false;
+}
+
+bool
+ImageView::telemetryPanelPathVisMouseReleaseEvent(const arras_render::MouseEvent& event)
+{
+    if (mPressShiftKey && !mPressAltKey && !mPressCtrlKey) { // SHIFT
+        return true;
+    } else if (!mPressShiftKey && !mPressAltKey && mPressCtrlKey) { // CTRL
+        // std::cerr << ">> ImageView.cc mouseReleaseEvent() CTRL\n"; // for debug
+    } else if (mPressShiftKey && !mPressAltKey && mPressCtrlKey) { // SHIFT + CTRL
+        // std::cerr << ">> ImageView.cc mouseReleaseEvent() SHIFT+CTRL\n"; // for debug
+    }
+    return false;
+}
+
+bool
+ImageView::evalArrasRenderCmd(const std::string& cmd, std::string& outMsg)
+{
+    scene_rdl2::grid_util::Parser& parser = mFbReceiver->consoleDriver().getRootParser();
+    return parser.main(cmd, outMsg);
+}
+
+void
+ImageView::orbitCamRecenterToCurrPos(const bool anim)
+{
+    using Vec3f = scene_rdl2::math::Vec3f;
+
+    if (mActiveCameraType != arras_render::CameraType::ORBIT_CAM) {
+        std::cerr << "Current camera is not ORBIT\n";
+        return;
+    }
+    
+    std::string outMsg;
+    if (!evalArrasRenderCmd("clientReceiver vecPktMgr getCurrPosXYZ", outMsg)) {
+        std::cerr << "failed to get currPos\n";
+        return;
+    }
+
+    std::string flag;
+    Vec3f vec;
+    std::stringstream sstr(outMsg);
+    sstr >> flag >> vec[0] >> vec[1] >> vec[2];
+    if (flag != "t") {
+        std::cerr << "no active currPos\n";
+        return;
+    }
+    // std::cerr << "flag:" << flag << ' ' << vec << '\n'; // for debug
+
+    if (!anim) {
+        mOrbitCam.setCOI(vec);
+        sendCamUpdate(1.0f);
+    } else {
+        const Vec3f delta = mOrbitCam.getCOI() - vec; 
+        
+        scene_rdl2::math::Mat4f camMtx;
+        std::vector<scene_rdl2::math::Mat4f> camMtxTbl;
+
+        const int max = mPathVisCamAnimSegmentTotal;
+        const Vec3f deltaStep = delta / static_cast<float>(max);
+        for (int i = max - 1 ; i >= 0; --i) {
+            Vec3f currCOI = deltaStep * i + vec;
+            mOrbitCam.setCOI(currCOI);
+            camMtx = mOrbitCam.update(1.0f);
+            camMtxTbl.push_back(camMtx);
+        }
+
+        mCamPlayback.clear();
+        mCamPlayback.recCamTbl(camMtxTbl, 0.0f, true);
+        mCamPlayback.quickPlayback();
+    }
+}
+
 void
 ImageView::populateRGBFrame()
 {
@@ -484,8 +966,8 @@ ImageView::savePPM(const std::string& filename) const
               << "  expectedSize:" << mImgWidth * mImgHeight * 3 << '\n';
 
     auto getPix = [&](int u, int v, unsigned char c[3]) {
-        int offPix = v * mImgWidth + u;
-        int offset = offPix * 3;
+        const int offPix = v * mImgWidth + u;
+        const int offset = offPix * 3;
         c[0] = mRgbFrame[offset];
         c[1] = mRgbFrame[offset + 1];
         c[2] = mRgbFrame[offset + 2];
@@ -512,8 +994,8 @@ ImageView::savePPM(const std::string& filename) const
 bool
 ImageView::saveQImagePPM(const std::string& filename, const QImage& image) const
 {
-    int width = image.width();
-    int height = image.height();
+    const int width = image.width();
+    const int height = image.height();
 
     std::cerr << ">> ImageView.cc saveQImagePPM(" << filename << ")\n"
               << "  width:" << width << " height:" << height << '\n';
@@ -597,7 +1079,7 @@ ImageView::addOverlay(QImage& image)
     qp.setPen(*mFontColor);
     qp.setFont(*mFont);
 
-    auto now = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
     std::chrono::seconds durationSeconds(std::chrono::duration_cast<std::chrono::seconds>(now - mRenderStart));
     std::chrono::minutes durationMinutes(std::chrono::duration_cast<std::chrono::minutes>(durationSeconds));
     std::chrono::hours durationhours(std::chrono::duration_cast<std::chrono::hours>(durationMinutes));
@@ -695,8 +1177,8 @@ ImageView::changeImageSize(int width, int height)
     //        mImgScale = static_cast<unsigned int>(ceil(static_cast<float>(mImgHeight)/TARGET_HEIGHT));
     //    }
     //
-    unsigned w = mImgWidth / mImgScale;
-    unsigned h = mImgHeight / mImgScale;
+    const unsigned w = mImgWidth / mImgScale;
+    const unsigned h = mImgHeight / mImgScale;
     mImage->setFixedSize(w, h);
 
     // Update telemetry overlay resolution for zoom action.
@@ -722,7 +1204,7 @@ ImageView::changeROI(int xMin, int yMin, int xMax, int yMax)
     scene_rdl2::rdl2::SceneVariables &sceneVars = mSceneCtx->getSceneVariables();
     scene_rdl2::rdl2::SceneVariables::UpdateGuard guard(&sceneVars);
     
-    std::vector<int> subViewport = {xMin, yMin, xMax, yMax};
+    const std::vector<int> subViewport = {xMin, yMin, xMax, yMax};
     sceneVars.set(scene_rdl2::rdl2::SceneVariables::sSubViewport, subViewport);
 }
 
@@ -745,15 +1227,15 @@ ImageView::setOverlayParam(unsigned offsetX, unsigned offsetY, unsigned fontSize
 void
 ImageView::getImageDisplayWidgetPos(int& topLeftX, int& topLeftY)
 {
-    int baseX = this->x();
-    int baseY = this->y();
+    const int baseX = this->x();
+    const int baseY = this->y();
 
     const QRect scrollGeom = mScrollArea->frameGeometry();
-    int scrollBaseX = scrollGeom.left();
-    int scrollBaseY = scrollGeom.top();
+    const int scrollBaseX = scrollGeom.left();
+    const int scrollBaseY = scrollGeom.top();
 
     const QRect scrollRect = mScrollArea->childrenRect();
-    int t = scrollRect.top();
+    const int t = scrollRect.top();
     
     topLeftX = baseX + scrollBaseX + 1;
     topLeftY = baseY + scrollBaseY + t + 37;
@@ -767,7 +1249,7 @@ ImageView::handleStartStop(bool start)
     std::lock_guard<std::mutex> guard(mSceneMux);
     mPaused = !start;
 
-    std::string msgDesc = start ? "Start" : "Stop";
+    const std::string msgDesc = start ? "Start" : "Stop";
 
     std::cout << "Sending Render " << msgDesc << " Message" << std::endl;
     mSdk->sendMessage((mcrt::RenderMessages::createControlMessage(!start)));
@@ -834,13 +1316,35 @@ ImageView::initCam()
     const scene_rdl2::rdl2::Camera* constCam = mSceneCtx->getPrimaryCamera();
     mRdlCam = mSceneCtx->getSceneObject(constCam->getName())->asA<scene_rdl2::rdl2::Camera>();
     scene_rdl2::math::Mat4f camXform(mRdlCam->get(scene_rdl2::rdl2::Node::sNodeXformKey));
-    mFreeCamera.resetTransform(camXform,true);
+    const float near = mRdlCam->get(scene_rdl2::rdl2::Camera::sNearKey);
 
-    mCamPlayback.setSendCamCallBack([&](const scene_rdl2::math::Mat4f& camMtx) {
-            mRdlCam->beginUpdate();
-            mRdlCam->set(scene_rdl2::rdl2::Node::sNodeXformKey, scene_rdl2::math::toDouble(camMtx));
-            mRdlCam->endUpdate();
-            sendSceneUpdate(true);
+    mFreeCam.resetTransform(camXform, true);
+
+    mOrbitCam.resetTransform(camXform, true);
+    mOrbitCam.setNear(near);
+    mOrbitCam.setCalcFocusPointCallBack([&]() -> scene_rdl2::math::Vec3f {
+        std::string outMsg;
+        scene_rdl2::grid_util::Parser& parser = getFbReceiver()->consoleDriver().getRootParser();
+        if (parser.main("clientReceiver getOrbitCamAutoFocusPoint", outMsg)) {
+            scene_rdl2::math::Vec3f vec;
+            std::stringstream sstr(outMsg);
+            sstr >> vec[0] >> vec[1] >> vec[2];
+            if (sstr) return vec;
+        }
+        return scene_rdl2::math::Vec3f();
+    });
+
+    mPathVisCamCheckpoint.updatePathVisCamMtx(camXform);
+    mPathVisCamCheckpoint.push(camXform);
+
+    mCamPlayback.setSendCamCallBack
+        ([&](const scene_rdl2::math::Mat4f& camMtx) { // void SendCamCallBack()
+            sendCamUpdateMain(camMtx, true);            
+        });
+    mCamPlayback.setSendForceRenderStartCallBack
+        ([&]() { // void SendForceRenderStartCallBack()
+            std::string outMsg;
+            evalArrasRenderCmd("genericMsg " + mcrt_dataio::McrtControl::msgGen_forceRenderStart(), outMsg);
         });
 }
 
@@ -862,7 +1366,7 @@ ImageView::changeRenderOutput(bool updateAovCombo)
             priorityAov = mCurrentOutput;
         }
 
-        setOutputRate(*mSdk, mAovInterval, 1, priorityAov, 1);
+        arras_render::setOutputRate(*mSdk, mAovInterval, 1, priorityAov, 1);
     }
 
     populateRGBFrame();
@@ -959,11 +1463,11 @@ ImageView::handleScaleSelect(int index)
 {
     mImgScale = index + 1;
 
-    unsigned int width = mImgWidth / mImgScale;
-    unsigned int height = mImgHeight / mImgScale;
+    const unsigned int width = mImgWidth / mImgScale;
+    const unsigned int height = mImgHeight / mImgScale;
     mImage->setFixedSize(width, height);
     mScrollArea->setMaximumSize(width+SCROLL_PAD, height+SCROLL_PAD);
-    QSize buttonSize = mButtonRow->sizeHint();
+    const QSize buttonSize = mButtonRow->sizeHint();
     setMaximumSize(width+40, height+buttonSize.height()+32);
 
     // Update telemetry overlay resolution for zoom action.
@@ -999,7 +1503,7 @@ ImageView::handleNewColor(float red, float green, float blue)
 {
     std::lock_guard<std::mutex> guard(mSceneMux);
 
-    scene_rdl2::math::Color newRdlColor(red, green, blue);
+    const scene_rdl2::math::Color newRdlColor(red, green, blue);
 
     std::cout << "New color " << newRdlColor << std::endl;
 
@@ -1018,15 +1522,15 @@ ImageView::handleColorButton()
         std::ostringstream title;
         title << "Color for: " << mCurLight->getName();
 
-        auto rdlColor = mCurLight->get(scene_rdl2::rdl2::Light::sColorKey);
+        const auto rdlColor = mCurLight->get(scene_rdl2::rdl2::Light::sColorKey);
         std::cout << "Current color " << rdlColor << std::endl;
 
         QColor curColor;
         curColor.setRgbF(rdlColor.r, rdlColor.g, rdlColor.b);
 
-        QColor newColor = QColorDialog::getColor(curColor,
-                                                 this,
-                                                 QString::fromStdString(title.str()));
+        const QColor newColor = QColorDialog::getColor(curColor,
+                                                       this,
+                                                       QString::fromStdString(title.str()));
 
         if (newColor.isValid()) {
             Q_EMIT setNewColorSignal(static_cast<float>(newColor.redF()),
@@ -1050,17 +1554,25 @@ ImageView::sendCamUpdate(float dt, bool forceUpdate)
         mCameraUpdateTime.start();
     }
 
-    camMat = mFreeCamera.update(dt);
+    camMat = getNavigationCam()->update(dt);
     if (mCamPlayback.getMode() == arras_render::CamPlayback::Mode::MODE_REC) {
         mCamPlayback.recCam(camMat);
     } else {
         mCamPlayback.saveCam(camMat); // save camera matrix only
     }
 
+    sendCamUpdateMain(camMat, forceUpdate);
+}
+
+void
+ImageView::sendCamUpdateMain(const scene_rdl2::math::Mat4f& camMat, const bool forceUpdate)
+{
     mRdlCam->beginUpdate();
     mRdlCam->set(scene_rdl2::rdl2::Node::sNodeXformKey, scene_rdl2::math::toDouble(camMat));
     mRdlCam->endUpdate();
     sendSceneUpdate(forceUpdate);
+
+    mPathVisCamCheckpoint.update(camMat);
 }
 
 void
@@ -1069,7 +1581,7 @@ ImageView::sendSceneUpdate(bool forceUpdate)
     // make sure we don't update too often
     if (!forceUpdate &&
         (mMinUpdateInterval > std::chrono::steady_clock::duration::zero())) {
-        auto now = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
         std::chrono::steady_clock::duration dt = now - mRenderStart;
         if (dt < mMinUpdateInterval)
             return;
@@ -1111,28 +1623,45 @@ ImageView::handleRunScript()
 void
 ImageView::mousePressEvent(QMouseEvent *aMouseEvent)
 {
-    MouseEvent evt(aMouseEvent->x(), aMouseEvent->y(), aMouseEvent->modifiers(),
-                   aMouseEvent->button(), aMouseEvent->buttons());
-    mFreeCamera.processMousePressEvent(&evt);
-    sendCamUpdate(-1);
+    const QPoint posInLabel = mImage->mapFrom(this, aMouseEvent->pos());    
+    arras_render::MouseEvent evt(posInLabel.x(), // mouse position X in the mImage QLabel
+                                 posInLabel.y(), // mouse position Y in the mImage QLabel
+                                 aMouseEvent->modifiers(),
+                                 aMouseEvent->button(),
+                                 aMouseEvent->buttons());
+
+    if (telemetryPanelMousePressEvent(evt)) {
+        std::cerr << ">> ImageView.cc telemetryPanelMousePressEvent TRUE\n";
+    } else if (getNavigationCam()->processMousePressEvent(&evt)) {
+        sendCamUpdate(-1);
+    }
 }
 
 void
 ImageView::mouseReleaseEvent(QMouseEvent *aMouseEvent)
 {
-    MouseEvent evt(aMouseEvent->x(), aMouseEvent->y(), aMouseEvent->modifiers(),
-                   aMouseEvent->button(), aMouseEvent->buttons());
-    mFreeCamera.processMouseReleaseEvent(&evt);
-    sendCamUpdate(-1);
+    const QPoint posInLabel = mImage->mapFrom(this, aMouseEvent->pos());    
+    arras_render::MouseEvent evt(posInLabel.x(), // mouse position X in the mImage QLabel
+                                 posInLabel.y(), // mouse position Y in the mImage QLabel
+                                 aMouseEvent->modifiers(),
+                                 aMouseEvent->button(),
+                                 aMouseEvent->buttons());
+
+    if (telemetryPanelMouseReleaseEvent(evt)) {
+        std::cerr << ">> ImageView.cc telemetryPanelMouseReleaseEvent TRUE\n";
+    } else if (getNavigationCam()->processMouseReleaseEvent(&evt)) {
+        sendCamUpdate(-1);
+    }
 }
 
 void
 ImageView::mouseMoveEvent(QMouseEvent *aMouseEvent)
 {
-    MouseEvent evt(aMouseEvent->x(), aMouseEvent->y(), aMouseEvent->modifiers(),
-                   aMouseEvent->button(), aMouseEvent->buttons());
-    mFreeCamera.processMouseMoveEvent(&evt);
-    sendCamUpdate(-1,false);
+    const arras_render::MouseEvent evt(aMouseEvent->x(), aMouseEvent->y(), aMouseEvent->modifiers(),
+                                 aMouseEvent->button(), aMouseEvent->buttons());
+    if (getNavigationCam()->processMouseMoveEvent(&evt)) {
+        sendCamUpdate(-1,false);
+    }
 }
 
 void
@@ -1141,44 +1670,33 @@ ImageView::keyPressEvent(QKeyEvent * aKeyEvent)
     auto getDenoiseCondition = [&]() {
         return (getFbReceiver()->getBeautyDenoiseMode() != mcrt_dataio::ClientReceiverFb::DenoiseMode::DISABLE);
     };
-    auto setDenoiseCondition = [&](bool flag) {
-        if (flag) {
-            getFbReceiver()->setBeautyDenoiseMode(mcrt_dataio::ClientReceiverFb::DenoiseMode::ENABLE);
-        } else {
-            getFbReceiver()->setBeautyDenoiseMode(mcrt_dataio::ClientReceiverFb::DenoiseMode::DISABLE);
-        }
-    };
 
-    mFreeCamera.setTelemetryOverlay(getFbReceiver()->getTelemetryOverlayActive());
-    mFreeCamera.setDenoise(getDenoiseCondition());
-    mFreeCamera.initSwitchTelemetryPanel();
+    mTelemetryOverlay = getFbReceiver()->getTelemetryOverlayActive();
+    mDenoise = getDenoiseCondition();
 
-    KeyEvent evt(1,aKeyEvent->key(),aKeyEvent->modifiers());
-    if (mFreeCamera.processKeyboardEvent(&evt, true)) {
+    arras_render::KeyEvent evt(arras_render::KeyAction_Press,
+                               aKeyEvent->key(),
+                               aKeyEvent->modifiers(),
+                               aKeyEvent->isAutoRepeat());
+    // std::cerr << ">> ImageView.cc ===>>> PRESS-Key <<<=== " << evt.show() << '\n'; // for debug
+
+    if (evt.getPress() == arras_render::KeyAction_Press && !evt.getAutoRepeat()) {
+        if (evt.getKey() == arras_render::Key_SHIFT) mPressShiftKey = true;
+        if (evt.getKey() == arras_render::Key_ALT) mPressAltKey = true;
+        if (evt.getKey() == arras_render::Key_CTRL) mPressCtrlKey = true;
+    }
+
+    arras_render::NavigationCam* cam = getNavigationCam();
+    bool activeKey = false;
+    if (cam->processKeyboardEvent(&evt)) {
         sendCamUpdate(1.0f);
+    } else if (processKeyboardEvent(&evt)) {
+        std::cerr << ">> ImageView.cc processed ImageView::keyPressEvent() processKeyboardEvent()\n";
+    } else if (telemetryPanelKeyboardEvent(&evt, activeKey)) {
+        std::cerr << ">> ImageView.cc processed ImageView::keyPressEvent() telemetryPanelKeyboardEvent()\n";
     } else {
-        if (mFreeCamera.getTelemetryOverlay()) {
-            mFbReceiver->setTelemetryOverlayActive(true);
-        } else {
-            mFbReceiver->setTelemetryOverlayActive(false);
-        }
-
-        if (mFbReceiver->getTelemetryOverlayActive()) {
-            if (mFreeCamera.getSwitchTelemetryPanelToParent()) {
-                mFbReceiver->switchTelemetryPanelToParent();                
-            } else if (mFreeCamera.getSwitchTelemetryPanelToNext()) {
-                mFbReceiver->switchTelemetryPanelToNext();
-            } else if (mFreeCamera.getSwitchTelemetryPanelToPrev()) {
-                mFbReceiver->switchTelemetryPanelToPrev();
-            } else if (mFreeCamera.getSwitchTelemetryPanelToChild()) {
-                mFbReceiver->switchTelemetryPanelToChild();
-            }
-        }
-
-        if (mFreeCamera.getDenoise()) {
-            setDenoiseCondition(true);
-        } else {
-            setDenoiseCondition(false);
+        if (!activeKey) {
+            std::cerr << ">> ImageView.cc no KeyboardEvent " << evt.show() << "\n";
         }
     }
 }
@@ -1186,8 +1704,114 @@ ImageView::keyPressEvent(QKeyEvent * aKeyEvent)
 void
 ImageView::keyReleaseEvent(QKeyEvent * aKeyEvent)
 {
-    KeyEvent evt(2,aKeyEvent->key(),aKeyEvent->modifiers());
-    if (mFreeCamera.processKeyboardEvent(&evt, false)) {
-        sendCamUpdate(1.0f);
+    arras_render::KeyEvent evt(arras_render::KeyAction_Release,
+                               aKeyEvent->key(),
+                               aKeyEvent->modifiers(),
+                               aKeyEvent->isAutoRepeat());
+    // std::cerr << ">> ImageView.cc +++>>> release-Key <<<+++ " << evt.show() << '\n'; // for debug
+
+    if (evt.getPress() == arras_render::KeyAction_Release && !evt.getAutoRepeat()) {
+        if (evt.getKey() == arras_render::Key_SHIFT) mPressShiftKey = false;
+        if (evt.getKey() == arras_render::Key_ALT) mPressAltKey = false;
+        if (evt.getKey() == arras_render::Key_CTRL) mPressCtrlKey = false;
     }
+
+    bool activeKey = false;
+    if (getNavigationCam()->processKeyboardEvent(&evt)) {
+        sendCamUpdate(1.0f); 
+    } else if (telemetryPanelKeyboardEvent(&evt, activeKey)) {
+        std::cerr << ">> ImageView.cc processed ImageView::keyReleaseEvent() telemetryPanelKeyboardEvent()\n";
+    }
+}
+
+std::string
+ImageView::pathVisClientInfoCallBack()
+{
+    auto modifierKeyStatus = [&]() {
+        auto showKey = [](const bool st, const std::string& name) {
+            using C3 = arras_render::telemetry::C3;
+            const C3 bgC(0,255,255);
+            const C3 fgC = bgC.bestContrastCol();
+            std::ostringstream ostr;
+            if (st) ostr << fgC.setFg() << bgC.setBg() << name << C3::resetFgBg();
+            else ostr << name;
+            return ostr.str();
+        };
+        std::ostringstream ostr;
+        ostr << showKey(mPressShiftKey, "Shift") << ' '
+             << showKey(mPressAltKey, "Alt") << ' '
+             << showKey(mPressCtrlKey, "Ctrl") << ' ';
+        return ostr.str();
+    };
+
+    std::ostringstream ostr;
+    ostr << "==>> Camera <<==\n";
+    if (mActiveCameraType == arras_render::CameraType::FREE_CAM) {
+        ostr << mFreeCam.telemetryPanelInfo();
+    } else { // OrbitCam
+        ostr << mOrbitCam.telemetryPanelInfo();
+    }
+    ostr << "\n\n"
+         << "posMoveStep:" << mPosMoveStep << '\n'
+         << mPathVisCamCheckpoint.telemetryPanelInfo() << '\n'
+         << '\n'
+         << modifierKeyStatus();
+
+    return ostr.str();
+}
+
+void
+ImageView::parserConfigure()
+{
+    mParser.description("ImageView commands");
+
+    mParser.opt("pathVisCamAnim", "<n|show>", "set path visualizer camera animation segment total",
+                [&](Arg& arg) {
+                    if (arg() == "show") arg++;
+                    else mPathVisCamAnimSegmentTotal = (arg++).as<unsigned>(0);
+                    return arg.msg(std::to_string(mPathVisCamAnimSegmentTotal) + '\n');
+                });
+    mParser.opt("showCamXform", "", "show navigate camera xform",
+                [&](Arg& arg) { return arg.msg(showNavigateCamXform() + '\n'); });
+    mParser.opt("currCamNear", "<near>", "update current camera's near value",
+                [&](Arg& arg) {
+                    const float near = (arg++).as<float>(0);
+                    cmdUpdateCurrCamNear(near);
+                    return true;
+                });
+}
+
+std::string
+ImageView::showNavigateCamXform()
+{
+    auto showMtx = [](const scene_rdl2::math::Mat4f& mtx) {
+        auto showV = [](const float f) {
+            std::ostringstream ostr;
+            ostr << std::setw(10) << std::fixed << std::setprecision(5) << f;
+            return ostr.str();
+        };
+        std::ostringstream ostr;
+        ostr << showV(mtx.vx.x) << ", " << showV(mtx.vx.y) << ", " << showV(mtx.vx.z) << ", " << showV(mtx.vx.w) << '\n'
+             << showV(mtx.vy.x) << ", " << showV(mtx.vy.y) << ", " << showV(mtx.vy.z) << ", " << showV(mtx.vy.w) << '\n'
+             << showV(mtx.vz.x) << ", " << showV(mtx.vz.y) << ", " << showV(mtx.vz.z) << ", " << showV(mtx.vz.w) << '\n'
+             << showV(mtx.vw.x) << ", " << showV(mtx.vw.y) << ", " << showV(mtx.vw.z) << ", " << showV(mtx.vw.w);
+        return ostr.str();
+    };
+
+    const scene_rdl2::math::Mat4f camXform = getNavigationCam()->update(0.0f);
+
+    std::ostringstream ostr;
+    ostr << "navigateCamXform {\n"
+         << scene_rdl2::str_util::addIndent(showMtx(camXform)) + '\n'
+         << "}";
+    return ostr.str();
+}
+
+void
+ImageView::cmdUpdateCurrCamNear(const float near)
+{
+    mRdlCam->beginUpdate();
+    mRdlCam->set(scene_rdl2::rdl2::Camera::sNearKey, near);
+    mRdlCam->endUpdate();
+    sendSceneUpdate(true);
 }

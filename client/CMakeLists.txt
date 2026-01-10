@@ -1,4 +1,4 @@
-# Copyright 2023-2024 DreamWorks Animation LLC
+# Copyright 2023-2025 DreamWorks Animation LLC
 # SPDX-License-Identifier: Apache-2.0
 
 set(CmdName arras_render)
@@ -10,12 +10,15 @@ add_executable(${CmdName})
 
 target_sources(${CmdName}
     PRIVATE
+        CamCheckpoint.cc
         CamPlayback.cc
         DebugConsoleSetup.cc
         encodingUtil.cc
         FreeCam.cc
         ImageView.cc
         main.cc
+        NavigationCam.cc
+        OrbitCam.cc
         outputRate.cc
         Scripting.cc
 )

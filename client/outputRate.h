@@ -1,4 +1,4 @@
-// Copyright 2023-2024 DreamWorks Animation LLC
+// Copyright 2023-2025 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef OUTPUT_RATE_H
@@ -16,6 +16,6 @@ void setOutputRate(arras4::sdk::SDK& sdk,
                    std::string priorityAov=std::string(),
                    unsigned priorityInterval=1);
 
-}
+} // namespace arras_render
 
 #endif /* OUTPUT_RATE_H */

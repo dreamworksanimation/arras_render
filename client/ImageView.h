@@ -1,6 +1,5 @@
-// Copyright 2023-2024 DreamWorks Animation LLC
+// Copyright 2023-2025 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
-
 #ifndef IMAGE_VIEW_H_
 #define IMAGE_VIEW_H_
 
@@ -15,8 +14,10 @@
 #include <sdk/sdk.h>
 #include "NotifiedValue.h"
 #include "Scripting.h"
+#include "CamCheckpoint.h"
 #include "CamPlayback.h"
 #include "FreeCam.h"
+#include "OrbitCam.h"
 
 #include <atomic>
 #include <chrono>
@@ -46,7 +47,15 @@ class ImageView : public QWidget
 {
     Q_OBJECT
 public:
+    using Arg = scene_rdl2::grid_util::Arg;
     using MsgCallBack = std::function<bool(const std::string& msg)>;
+    using Parser = scene_rdl2::grid_util::Parser;
+
+    enum class CameraType : int {
+        ORBIT_CAM,
+        FREE_CAM,
+        NUM_CAMERA_TYPES,
+    };
 
     ImageView(std::shared_ptr<mcrt_dataio::ClientReceiverFb> pFbReceiver,
               std::unique_ptr<scene_rdl2::rdl2::SceneContext> sceneCtx,
@@ -98,6 +107,8 @@ public:
 
     void getImageDisplayWidgetPos(int& topLeftX, int& topLeftY);
 
+    Parser& getParser() { return mParser; }                                                               
+
 public Q_SLOTS:
     void displayFrameSlot();
     void handleStart();
@@ -126,11 +137,11 @@ Q_SIGNALS:
     void exitProgramSignal();
 
 protected:
-    void mouseMoveEvent(QMouseEvent* aMouseEvent);
-    void mousePressEvent(QMouseEvent* aMouseEvent);
-    void mouseReleaseEvent(QMouseEvent* aMouseEvent);
-    void keyPressEvent(QKeyEvent * event);
-    void keyReleaseEvent(QKeyEvent * event);
+    void mouseMoveEvent(QMouseEvent* aMouseEvent) override;
+    void mousePressEvent(QMouseEvent* aMouseEvent) override;
+    void mouseReleaseEvent(QMouseEvent* aMouseEvent) override;
+    void keyPressEvent(QKeyEvent * event) override;
+    void keyReleaseEvent(QKeyEvent * event) override;
 
 private:
     void initImage();
@@ -141,12 +152,33 @@ private:
     void addOverlay(QImage& image);
     void handleStartStop(bool start);
     void sendCamUpdate(float dt=-1.f, bool forceUpdate = true); 
+    void sendCamUpdateMain(const scene_rdl2::math::Mat4f& camMat, const bool forceUpdate);
     void sendSceneUpdate(bool forceUpdate = true);
     void updateOutputsComboBox();
+
+    arras_render::NavigationCam* getNavigationCam();
+    bool processKeyboardEvent(const arras_render::KeyEvent* event);
+    bool telemetryPanelKeyboardEvent(const arras_render::KeyEvent* event, bool& activeKey);
+    bool telemetryPanelPathVisKeyboardEvent(const arras_render::KeyEvent* event, bool& activeKey);
+    bool evalArrasRenderCmd(const std::string& cmd, std::string& outMsg);
+    void orbitCamRecenterToCurrPos(const bool anim);
+
+    bool telemetryPanelMousePressEvent(const arras_render::MouseEvent& event);
+    bool telemetryPanelPathVisMousePressEvent(const arras_render::MouseEvent& event);
+    bool telemetryPanelMouseReleaseEvent(const arras_render::MouseEvent& event);
+    bool telemetryPanelPathVisMouseReleaseEvent(const arras_render::MouseEvent& event);
 
     void populateRGBFrame();
     bool savePPM(const std::string& filename) const; // for debug
     bool saveQImagePPM(const std::string& filename, const QImage& image) const; // for debug
+
+    std::string pathVisClientInfoCallBack();
+
+    void parserConfigure();
+    std::string showNavigateCamXform();
+    void cmdUpdateCurrCamNear(const float near);
+
+    //------------------------------
 
     bool mOverlay;
     const std::string mSessionName;
@@ -172,6 +204,10 @@ private:
     std::unique_ptr<QFont> mFont;
     std::unique_ptr<QPen> mFontColor;
 
+    bool mPressShiftKey {false};
+    bool mPressAltKey {false};
+    bool mPressCtrlKey {false};
+
     // Arras & Moonray
     std::mutex mSceneMux;
     std::shared_ptr<arras4::sdk::SDK> mSdk;
@@ -181,12 +217,24 @@ private:
     const unsigned mAovInterval;
 
     // Camera
-    FreeCam mFreeCamera;
+    arras_render::CameraType mActiveCameraType {arras_render::CameraType::FREE_CAM};
+    arras_render::OrbitCam mOrbitCam;
+    arras_render::FreeCam mFreeCam;
     scene_rdl2::rec_time::RecTime mCameraUpdateTime;
     scene_rdl2::rdl2::Camera* mRdlCam;
     scene_rdl2::rdl2::Light* mCurLight;
 
     arras_render::CamPlayback mCamPlayback;
+
+    bool mTelemetryOverlay {false}; // for keyPress event
+    bool mDenoise {false}; // for keyPress event
+
+    bool mPathVisEnable {false};
+    unsigned mPosMoveStep {64};
+    arras_render::telemetry::CamCheckpoint mPathVisCamCheckpoint;
+    unsigned mPathVisCamAnimSegmentTotal {7};
+    bool mPathVisLastEscKeyPress {false};
+    bool mPathVisLastQuestionKeyPress {false};
 
     // Rendered Frame data
     bool mBlankDisplay;
@@ -216,6 +264,8 @@ private:
 
     // There is some possibility to send message by 2 different threads and we need MTsafe send operation.
     std::mutex mMutexSendMessage; // mutex for sendMessage
+
+    Parser mParser;
 };
 
 #endif /* IMAGE_VIEW_H_ */

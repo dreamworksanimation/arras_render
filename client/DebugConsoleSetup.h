@@ -1,4 +1,4 @@
-// Copyright 2023-2024 DreamWorks Animation LLC
+// Copyright 2023-2025 DreamWorks Animation LLC
 // SPDX-License-Identifier: Apache-2.0
 
 #pragma once
@@ -15,7 +15,7 @@ class ImageView;
 namespace arras_render {
 
 void
-debugConsoleSetup(int port,
+debugConsoleSetup(const int port,
                   std::shared_ptr<arras4::sdk::SDK> &sdk,
                   std::shared_ptr<mcrt_dataio::ClientReceiverFb> &fbReceiver,
                   std::atomic<ImageView *> &imageView);
