@@ -1,15 +1,6 @@
 name: Harmony Pipeline CD Trigger
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - '**.md'
-      - '.github/**'
-      - 'flowpipeline.yaml'
-      - 'LICENSE'
-      - 'tsc/**'
   workflow_dispatch:
 
 jobs:
